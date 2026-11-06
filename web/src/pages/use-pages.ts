@@ -8,6 +8,7 @@ import {
   type ItemFieldsFragment,
   type ItemInput,
   MoveItemDocument,
+  MoveItemToPageDocument,
   MovePageDocument,
   MoveSectionDocument,
   type PageFieldsFragment,
@@ -238,6 +239,24 @@ export function useMoveItem() {
     mutationFn: async (vars: { pageSlug: string; id: string; toSectionId?: string | null; toIndex: number }) =>
       (await request(MoveItemDocument, vars)).moveItem,
     onSuccess: (page) => writePage(client, page),
+  });
+}
+
+/**
+ * Moves an item to another page, into a section there (that page's first when left out).
+ *
+ * @returns The mutation. Its result holds both pages, already written to the cache, and the item's id
+ * where it landed.
+ */
+export function useMoveItemToPage() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: async (vars: { pageSlug: string; id: string; toPageSlug: string; toSectionId?: string | null }) =>
+      (await request(MoveItemToPageDocument, vars)).moveItemToPage,
+    onSuccess: ({ from, to }) => {
+      writePage(client, from);
+      writePage(client, to);
+    },
   });
 }
 

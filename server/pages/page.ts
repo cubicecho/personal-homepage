@@ -312,4 +312,23 @@ export interface PageStore {
    * @returns The page, in the new order.
    */
   moveItem(slug: string, id: string, toSectionId: string | null, toIndex: number): Promise<Page>;
+  /**
+   * Moves an item to another page, everything about it included, in one change: it is never on both
+   * pages, or on neither.
+   *
+   * @param slug - The page it is on.
+   * @param id - The item's id.
+   * @param toSlug - The page it goes to. The same page moves it as `moveItem` does.
+   * @param toSectionId - The section it goes to, or null for that page's first (its own, on the same page).
+   * @param toIndex - Where it goes in that section, clamped to it; null for the end.
+   * @returns Both pages (the same page twice when it stayed), and its id where it landed: the same, unless
+   * the page it went to already had an item with that id, when it gets a numbered one.
+   */
+  moveItemToPage(
+    slug: string,
+    id: string,
+    toSlug: string,
+    toSectionId: string | null,
+    toIndex: number | null,
+  ): Promise<{ from: Page; to: Page; itemId: string }>;
 }
