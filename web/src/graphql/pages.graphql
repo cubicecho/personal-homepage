@@ -145,6 +145,18 @@ mutation MoveItem($pageSlug: ID!, $id: ID!, $toSectionId: ID, $toIndex: Int!) {
   }
 }
 
+mutation MoveItemToPage($pageSlug: ID!, $id: ID!, $toPageSlug: ID!, $toSectionId: ID, $toIndex: Int) {
+  moveItemToPage(pageSlug: $pageSlug, id: $id, toPageSlug: $toPageSlug, toSectionId: $toSectionId, toIndex: $toIndex) {
+    itemId
+    from {
+      ...PageFields
+    }
+    to {
+      ...PageFields
+    }
+  }
+}
+
 mutation AddSection($pageSlug: ID!, $input: SectionInput!) {
   addSection(pageSlug: $pageSlug, input: $input) {
     ...PageFields

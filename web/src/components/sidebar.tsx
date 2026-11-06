@@ -447,8 +447,13 @@ function IconMarkers({
         // reaches a neighbour's icon. The text is its own element because a badge's label is 12px
         // on a 16px line, which is taller than that corner: here it is 12px on a 12px line, since a
         // count is digits with nothing hanging below them, and 12px is the floor of the type scale.
-        <Badge variant="secondary" className={cn("-right-1.5 -top-1.5 absolute px-1 py-0", ring)}>
-          <span className="cube-rn-text font-semibold text-xs text-foreground leading-3 tabular-nums">
+        // It is drawn in the page's colours swapped, as a tooltip is: it overlaps the glyph's corner,
+        // and the `secondary` badge's `/10` tint let the glyph show through the digits.
+        <Badge
+          variant="secondary"
+          className={cn("-right-1.5 -top-1.5 absolute bg-foreground px-1 py-0", ring)}
+        >
+          <span className="cube-rn-text font-semibold text-xs text-background leading-3 tabular-nums">
             {count}
           </span>
         </Badge>

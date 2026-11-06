@@ -543,5 +543,21 @@ export const TYPE_DEFS = /* GraphQL */ `
     removeItem(pageSlug: ID!, id: ID!): Page!
     "Moves an item within its page, into another section when toSectionId is given, and returns the page."
     moveItem(pageSlug: ID!, id: ID!, toSectionId: ID, toIndex: Int!): Page!
+    """
+    Moves an item to another page, everything about it included, and returns both pages and its id there.
+    It goes to toSectionId, or that page's first section, at toIndex, or the end. Moving to its own page
+    works as moveItem does.
+    """
+    moveItemToPage(pageSlug: ID!, id: ID!, toPageSlug: ID!, toSectionId: ID, toIndex: Int): MoveItemResult!
+  }
+
+  "Where an item went when it moved to another page."
+  type MoveItemResult {
+    "The page it left."
+    from: Page!
+    "The page it went to. The same page when it was moved within its own."
+    to: Page!
+    "Its id on the page it went to: the same, unless that page already had an item with that id."
+    itemId: ID!
   }
 `;

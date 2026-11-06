@@ -32,13 +32,11 @@ import { useThemePreference } from '@/components/ui/theme-preference';
 import { LayoutGrid } from '@/core/app-icons';
 import { setUnauthenticatedHandler } from '@/core/gql';
 import { iconElement } from '@/core/page-icons';
-import { ExportButton } from '@/export/export-button';
 import { PageDialog } from '@/pages/page-dialog';
 import { type Page, usePages } from '@/pages/use-pages';
 import { commandKeyLabel } from '@/search/hotkeys';
 import { SearchButton, SearchProvider } from '@/search/search-launcher';
 import { ThemeMenu } from '@/shell/theme-menu';
-import { useInertFramesUnderOverlays } from '@/shell/use-inert-frames';
 import { useSidebarFold } from '@/shell/use-sidebar-fold';
 
 const SidebarLink = createLink(SidebarNavItem);
@@ -138,7 +136,6 @@ function SidebarFooter({ isSettings }: { isSettings: boolean }) {
   return (
     <div className={collapsed ? 'flex flex-col items-center gap-2' : 'flex flex-col gap-2'}>
       <AccountRows isSettings={isSettings} />
-      <ExportButton compact={collapsed} />
       {collapsed ? <ThemeMenu /> : <ThemePicker variant="compact" />}
       <SidebarCollapseButton
         collapseLabel={`Collapse sidebar (${shortcut})`}
@@ -168,7 +165,6 @@ function pageIcon(page: Page) {
  */
 function RootRoute() {
   useThemePreference();
-  useInertFramesUnderOverlays();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (state) => state.location.pathname });
@@ -332,7 +328,7 @@ function Shell({ isSettings }: { isSettings: boolean }) {
                       {...linkTo(page)}
                       label={page.title}
                       iconSlot={pageIcon(page)}
-                      count={page.items.length}
+                      count={page.items.length === 0 ? undefined : page.items.length}
                       active={page.slug === currentSlug}
                     />
                   ))}

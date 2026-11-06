@@ -1,4 +1,3 @@
-import { strFromU8, unzipSync } from 'fflate';
 import { ErrorCode } from '../../server/core/errors.ts';
 import type { OpenedDatabase } from '../../server/db/client.ts';
 import { openTestDatabase, resetTestDatabase } from '../db.ts';
@@ -154,28 +153,6 @@ describe('an instance with sign-in set up', () => {
     expect(asGuest.data.page.sections).toEqual([{ id: 'main', items: [] }]);
   });
 
-  it('leaves hidden pages and items out of the zip a viewer downloads', async () => {
-    const signedIn = await startSignedIn();
-    const admin = asProxyUser('admin');
-    await signedIn.gql(ACCESS, {}, admin);
-    await signedIn.gql(ADD_PAGE, { input: { title: 'Kids', visibleTo: ['family'] } }, admin);
-
-    const download = async (headers: Record<string, string>): Promise<string[]> => {
-      const response = await fetch(`${signedIn.base}/export.zip`, { headers });
-      const files = unzipSync(new Uint8Array(await response.arrayBuffer()));
-      return Object.keys(files).sort();
-    };
-    expect(await download(asProxyUser('guest'))).toEqual(['pages/home.yaml', 'site.yaml']);
-    expect(await download(admin)).toEqual(['pages/home.yaml', 'pages/kids.yaml', 'site.yaml']);
-    const zipped = unzipSync(
-      new Uint8Array(await (await fetch(`${signedIn.base}/export.zip`, { headers: admin })).arrayBuffer()),
-    );
-    expect(strFromU8(zipped['pages/kids.yaml'] ?? new Uint8Array())).toContain('family');
-
-    const anonymous = await fetch(`${signedIn.base}/export.zip`);
-    expect(anonymous.status).toBe(401);
-  });
-
   it('signs favicon links, and refuses the icon route without one', async () => {
     const signedIn = await startSignedIn();
     const admin = asProxyUser('admin');
@@ -191,5 +168,29 @@ describe('an instance with sign-in set up', () => {
     expect(bare.status).toBe(404);
     const forged = await fetch(`${signedIn.base}${signed.replace(/sig=[\w-]+/, 'sig=forged')}`);
     expect(forged.status).toBe(404);
+  });
+
+  it('lets an editor move an item to another page, and nobody else', async () => {
+    const signedIn = await startSignedIn();
+    const admin = asProxyUser('admin');
+    await signedIn.gql(ACCESS, {}, admin);
+    await signedIn.gql(ADD_PAGE, { input: { title: 'Media' } }, admin);
+    await signedIn.gql(
+      ADD_ITEM,
+      { page: 'home', input: { kind: 'LINK', title: 'Plex', url: 'http://plex.lan' } },
+      admin,
+    );
+    const MOVE =
+      'mutation { moveItemToPage(pageSlug: "home", id: "plex", toPageSlug: "media") { itemId from { slug items { id } } to { slug items { id url } } } }';
+
+    expect(codeOf(await signedIn.gql(MOVE, {}, asProxyUser('guest')))).toBe(ErrorCode.Forbidden);
+
+    const { data, errors } = await signedIn.gql(MOVE, {}, admin);
+    expect(errors).toBeUndefined();
+    expect(data.moveItemToPage).toEqual({
+      itemId: 'plex',
+      from: { slug: 'home', items: [] },
+      to: { slug: 'media', items: [{ id: 'plex', url: 'http://plex.lan' }] },
+    });
   });
 });

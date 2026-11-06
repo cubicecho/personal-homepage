@@ -19,13 +19,13 @@ import {
   OpensIn,
   type Page,
   type PageStore,
+  type Section,
 } from './page.ts';
 import * as edits from './page-edits.ts';
 import { describeIssues, SLUG_PATTERN } from './page-input.ts';
 import { slugFrom, uniqueSlug } from './slug.ts';
 import type { Widget } from './widget.ts';
-import { diskWidgetSchema, widgetFromDisk, widgetToDisk } from './widget-disk.ts';
-import { emptySection } from './yaml-format.ts';
+import { storedWidgetSchema, widgetFromStored, widgetToStored } from './widget-storage.ts';
 
 const { maxPages } = PAGE_LIMIT_DEFAULTS;
 
@@ -33,8 +33,19 @@ const { maxPages } = PAGE_LIMIT_DEFAULTS;
 const FALLBACK_PAGE_SLUG = 'page';
 /** The icon of the page every database starts with. */
 const HOME_ICON = 'house';
+/** The id of a page's untitled first section. */
+const MAIN_SECTION_ID = 'main';
 /** The advisory lock every write takes, so writes run one at a time. Any fixed number would do. */
 const WRITE_LOCK_KEY = 4_206_001;
+
+/**
+ * Builds the untitled section a new page starts with.
+ *
+ * @returns The section, with no items.
+ */
+function emptySection(): Section {
+  return { id: MAIN_SECTION_ID, title: null, collapsed: false, visibleTo: [], items: [] };
+}
 
 /** A transaction on either driver. */
 type Transaction = PgAsyncTransaction<PgQueryResultHKT>;
@@ -69,8 +80,8 @@ function widgetFromRow(row: ItemRow): Widget | null {
   if (row.widget === null) {
     return null;
   }
-  const parsed = diskWidgetSchema.safeParse(row.widget);
-  const widget = parsed.success ? widgetFromDisk(parsed.data) : describeIssues(parsed.error);
+  const parsed = storedWidgetSchema.safeParse(row.widget);
+  const widget = parsed.success ? widgetFromStored(parsed.data) : describeIssues(parsed.error);
   if (typeof widget === 'string') {
     throw new Error(`The widget of item "${row.id}" on page "${row.pageSlug}" can't be read: ${widget}`);
   }
@@ -267,7 +278,7 @@ export async function writePage(tx: Transaction, page: Page): Promise<Page> {
       checkEnabled: item.check.enabled,
       checkUrl: item.check.url,
       // The YAML mapping, secret references as written: never a resolved value.
-      widget: item.widget === null ? null : widgetToDisk(item.widget),
+      widget: item.widget === null ? null : widgetToStored(item.widget),
       visibleTo: item.visibleTo,
       // A link to a discovered app deleted since is dropped, as the foreign key does on delete.
       discoveredId: item.discoveredId !== null && linkable.has(item.discoveredId) ? item.discoveredId : null,
@@ -427,6 +438,21 @@ export async function createDbPageStore(db: Database): Promise<PageStore> {
     updateItem: (slug, id, fields) => edit(slug, (page) => edits.updateItem(page, id, fields)),
     removeItem: (slug, id) => edit(slug, (page) => edits.removeItem(page, id)),
     moveItem: (slug, id, toSectionId, toIndex) => edit(slug, (page) => edits.moveItem(page, id, toSectionId, toIndex)),
+
+    moveItemToPage: (slug, id, toSlug, toSectionId, toIndex) =>
+      exclusive(db, async (tx) => {
+        const from = await loadPage(tx, slug);
+        if (toSlug === slug) {
+          // An index past the end is clamped to it, so no index means the end of the section.
+          const page = edits.moveItem(from, id, toSectionId, toIndex ?? Number.POSITIVE_INFINITY);
+          await writePage(tx, page);
+          return { from: page, to: page, itemId: id };
+        }
+        const moved = edits.transferItem(from, id, await loadPage(tx, toSlug), toSectionId, toIndex);
+        await writePage(tx, moved.from);
+        await writePage(tx, moved.to);
+        return moved;
+      }),
   };
 }
 

@@ -2,7 +2,7 @@ import { sql } from 'drizzle-orm';
 import { PAGE_LIMIT_DEFAULTS } from '../../server/core/defaults.ts';
 import { ErrorCode } from '../../server/core/errors.ts';
 import type { OpenedDatabase } from '../../server/db/client.ts';
-import { items, pages } from '../../server/db/schema.ts';
+import { discoveredApps, items, pages } from '../../server/db/schema.ts';
 import { createDbPageStore } from '../../server/pages/db-page-store.ts';
 import { ColumnSpan, HOME_SLUG, ItemKind, itemsOf, OpensIn, type PageStore } from '../../server/pages/page.ts';
 import { parseWidget } from '../../server/pages/page-input.ts';
@@ -20,6 +20,13 @@ describe('database page store', () => {
   let store: PageStore;
 
   const slugs = async () => (await store.list()).map((page) => page.slug);
+  const mustFind = async (slug: string) => {
+    const page = await store.find(slug);
+    if (page === null) {
+      throw new Error(`no page ${slug}`);
+    }
+    return page;
+  };
 
   beforeAll(async () => {
     database = await openTestDatabase();
@@ -329,5 +336,117 @@ describe('database page store', () => {
         sql`insert into items (page_slug, section_id, id, kind, title, url, position) values ('home', 'main', 'x', 'APP', 'X', 'http://x', 0)`,
       ),
     ).rejects.toThrow();
+  });
+
+  describe('moving an item to another page', () => {
+    const queue = parseWidget({
+      type: WidgetType.Api,
+      api: {
+        url: 'http://sonarr.lan:8989/api/v3/queue',
+        headers: [{ name: 'X-Api-Key', value: '${env:HOMEPAGE_SONARR_KEY}' }],
+        fields: [{ label: 'Downloading', path: '$.totalRecords' }],
+      },
+    });
+
+    beforeEach(async () => {
+      await store.createPage({ title: 'Media', icon: null, visibleTo: [] });
+      await store.addSection('media', { title: 'Watch', collapsed: false, visibleTo: [] });
+      await store.addItem('media', null, linkFields('Plex'));
+      await store.addItem('media', 'watch', linkFields('Emby'));
+    });
+
+    it('carries every field of the item, and the item alone', async () => {
+      await database.db.insert(discoveredApps).values({
+        id: 'found-1',
+        source: 'DOCKHAND',
+        sourceKey: 'nas/jellyfin',
+        name: 'Jellyfin',
+        url: 'http://nas:8096',
+      });
+      const original = linkFields('Jellyfin', {
+        url: 'http://nas.local:8096',
+        opensIn: OpensIn.App,
+        icon: 'di:jellyfin',
+        description: 'Films and shows',
+        check: { enabled: false, url: 'http://nas.local:8096/health' },
+        visibleTo: ['family'],
+        discoveredId: 'found-1',
+      });
+      await store.addItem(HOME_SLUG, null, original);
+      await store.addItem(HOME_SLUG, null, linkFields('Router'));
+      const before = itemsOf(await mustFind(HOME_SLUG))[0];
+
+      const moved = await store.moveItemToPage(HOME_SLUG, 'jellyfin', 'media', 'watch', 0);
+
+      expect(moved.itemId).toBe('jellyfin');
+      expect(itemsOf(moved.from).map((item) => item.id)).toEqual(['router']);
+      const arrived = moved.to.sections.find((section) => section.id === 'watch')?.items[0];
+      // Every field the item has, whatever is added to items later, reads back the same.
+      expect(arrived).toEqual(before);
+      expect(await store.find('media')).toEqual(moved.to);
+      expect(await store.find(HOME_SLUG)).toEqual(moved.from);
+    });
+
+    it('carries a widget, secret references as written', async () => {
+      const widget = linkFields('Sonarr', { kind: ItemKind.Widget, url: null, opensIn: null, widget: queue });
+      await store.addItem(HOME_SLUG, null, widget);
+      const moved = await store.moveItemToPage(HOME_SLUG, 'sonarr', 'media', null, null);
+      expect(itemsOf(moved.to).find((item) => item.id === 'sonarr')).toMatchObject({
+        kind: ItemKind.Widget,
+        widget: queue,
+      });
+    });
+
+    it('goes to the end of the first section by default, and gets a new id when its own is taken', async () => {
+      await store.addItem(HOME_SLUG, null, linkFields('Plex', { url: 'http://home-plex.lan' }));
+      const moved = await store.moveItemToPage(HOME_SLUG, 'plex', 'media', null, null);
+      expect(moved.itemId).toBe('plex-2');
+      expect(moved.to.sections.map((section) => section.items.map((item) => item.id))).toEqual([
+        ['plex', 'plex-2'],
+        ['emby'],
+      ]);
+      expect(itemsOf(moved.to).find((item) => item.id === 'plex-2')?.url).toBe('http://home-plex.lan');
+    });
+
+    it('clamps the place it goes to, and renumbers both pages', async () => {
+      await store.addItem(HOME_SLUG, null, linkFields('A'));
+      await store.addItem(HOME_SLUG, null, linkFields('B'));
+      await store.addItem(HOME_SLUG, null, linkFields('C'));
+      await store.moveItemToPage(HOME_SLUG, 'b', 'media', 'watch', 99);
+      const positions = await database.db
+        .select({ page: items.pageSlug, id: items.id, position: items.position })
+        .from(items)
+        .orderBy(items.pageSlug, items.position);
+      expect(positions).toEqual([
+        { page: 'home', id: 'a', position: 0 },
+        { page: 'home', id: 'c', position: 1 },
+        { page: 'media', id: 'plex', position: 0 },
+        { page: 'media', id: 'emby', position: 1 },
+        { page: 'media', id: 'b', position: 2 },
+      ]);
+    });
+
+    it('moves within the page when the page it goes to is its own', async () => {
+      const moved = await store.moveItemToPage('media', 'plex', 'media', 'watch', null);
+      expect(moved.from).toBe(moved.to);
+      expect(moved.itemId).toBe('plex');
+      expect(moved.to.sections.map((section) => section.items.map((item) => item.id))).toEqual([[], ['emby', 'plex']]);
+    });
+
+    it('refuses an unknown page, section or item, and a full page, changing nothing', async () => {
+      await store.addItem(HOME_SLUG, null, linkFields('Router'));
+      await expect(store.moveItemToPage(HOME_SLUG, 'router', 'nope', null, null)).rejects.toMatchObject(notFound);
+      await expect(store.moveItemToPage(HOME_SLUG, 'router', 'media', 'nope', null)).rejects.toMatchObject(notFound);
+      await expect(store.moveItemToPage(HOME_SLUG, 'nope', 'media', null, null)).rejects.toMatchObject(notFound);
+
+      const full = Array.from({ length: PAGE_LIMIT_DEFAULTS.maxItemsPerPage - 2 }, (_unused, index) =>
+        linkFields(`Filler ${index}`),
+      );
+      for (const fields of full) {
+        await store.addItem('media', null, fields);
+      }
+      await expect(store.moveItemToPage(HOME_SLUG, 'router', 'media', null, null)).rejects.toMatchObject(badInput);
+      expect(itemsOf(await mustFind(HOME_SLUG)).map((item) => item.id)).toEqual(['router']);
+    });
   });
 });

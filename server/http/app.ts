@@ -14,7 +14,6 @@ import type { Database } from '../db/client.ts';
 import { createDescriber } from '../discovery/describe.ts';
 import { createDiscoveryService } from '../discovery/service.ts';
 import { createDiscoveryStore } from '../discovery/store.ts';
-import { mountExport } from '../export/zip-export.ts';
 import { createFrameChecker } from '../frames/frame-check.ts';
 import { graphqlLogger } from '../graphql/logger.ts';
 import { useOperationLimits } from '../graphql/operation-limits.ts';
@@ -31,7 +30,7 @@ import { mountSso } from './sso.ts';
 const GRAPHQL_ENDPOINT = '/graphql';
 const HEALTH_ENDPOINT = '/healthz';
 /** Every path but the server's own, so the web app's routes load index.html. */
-const WEB_ROUTES = /^(?!\/(graphql|healthz|export\.zip)$)(?!\/icons\/|\/sso\/|\/api\/auth\/).*/;
+const WEB_ROUTES = /^(?!\/(graphql|healthz)$)(?!\/icons\/|\/sso\/|\/api\/auth\/).*/;
 /** Where `npm run build` puts the web app. */
 export const WEB_DIST = fileURLToPath(new URL('../../dist', import.meta.url));
 
@@ -77,7 +76,7 @@ function headersOf(raw: Request['headers']): Headers {
 }
 
 /**
- * Builds the Express app: GraphQL, health, the OIDC legs, export, icons, and the built web app when there
+ * Builds the Express app: GraphQL, health, the OIDC legs, icons, and the built web app when there
  * is one. It does not listen.
  *
  * @param deps - The stores, the database and auth host, the other services when a test replaces them, and
@@ -147,7 +146,6 @@ export function createApp({
   app.use(GRAPHQL_ENDPOINT, express.json({ limit: HTTP_DEFAULTS.bodyLimit }));
   app.all(GRAPHQL_ENDPOINT, (req, res) => yoga(req, res, { req }));
   mountSso(app, services.authHost, services.db);
-  mountExport(app, services, accessFor);
   mountIcons(app, services.pages, dataDir, {
     iconLinks,
     discoveredUrl: async (id) => (await services.discovery.find(id))?.url ?? null,

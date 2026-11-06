@@ -30,8 +30,7 @@ npm install
 npm run dev                    # web on http://localhost:3000, API on :8787 (GraphiQL at /graphql)
 ```
 
-The first start makes `./data/pg`, the built-in database, with an empty Home page. To start from the sample
-pages instead, stop the server and run `npm run db:import-yaml -- --data-dir examples/data --replace`.
+The first start makes `./data/pg`, the built-in database, with an empty Home page.
 
 ```sh
 npm run check && npm test      # lint, types, tests
@@ -65,30 +64,17 @@ Released images are published to GHCR as `ghcr.io/cubicecho/personal-homepage`, 
 
 ### Backups
 
-- **Download as zip,** at the bottom of the sidebar (`GET /export.zip`), saves every page and the search settings
-  as readable YAML: `site.yaml` and one `pages/<slug>.yaml` per page.
-  - To restore one, unzip it and run `npm run db:import-yaml -- --data-dir <the unzipped folder> --replace`, with
-    the server stopped when it uses the built-in database.
-  - A zip is a copy of the pages as they are now; there is no versioning.
-- **The built-in database:** copy `DATA_DIR/pg` while the server is stopped.
-- **Postgres:** `pg_dump`, as for any database.
+Everything (pages, sign-in, discovered apps) is in the database, so a backup is a copy of it:
+
+- **The built-in database:** stop the server, then copy `DATA_DIR/pg`. Restore by putting the copy back with the
+  server stopped.
+- **Postgres:** `pg_dump` and `pg_restore`, as for any database.
 
 ### Upgrading from 1.x
 
-Releases before 2.0 kept pages as YAML files in `DATA_DIR`. On its first start, 2.0 moves them into the database
-by itself:
-
-1. It imports `DATA_DIR/pages/*.yaml` and the page order and search settings in `DATA_DIR/site.yaml`, in one go.
-   This happens only when the database holds nothing but an empty Home page.
-2. It renames `pages/` and `site.yaml` to `pages.imported-<time>/` and `site.imported-<time>.yaml`, so they are
-   never imported twice.
-3. It logs `[db] imported N pages from YAML`. A file it can't read is logged and left out; the rest still import.
-
-To import YAML into a database that already has pages, use
-`npm run db:import-yaml -- --data-dir <folder> --replace`. It deletes the pages that are there first.
-
-Every 1.x format reads: `kind: app` items become links that open in the app, and a page with bare `items:` becomes
-one untitled section.
+Releases before 2.0 kept pages as YAML files in `DATA_DIR`. 2.x imported them into the database on its first start;
+3.0 no longer reads YAML at all. To keep pages from a 1.x install, upgrade to the last 2.x release first, start it
+once so it imports them, then upgrade to 3.x.
 
 ## Items
 
@@ -129,8 +115,7 @@ mutation {
 }
 ```
 
-`setSearchEngines(input: null)` goes back to the built-in engines. A `search:` key in an imported `site.yaml` sets
-them too.
+`setSearchEngines(input: null)` goes back to the built-in engines.
 
 ## Widgets
 
@@ -157,21 +142,8 @@ How they fetch:
 ### Secrets
 
 An API widget's address, headers and body may hold secret references, which the server fills in only when it
-fetches. The database, the API and the zip export keep the reference, never the value. In an export it looks
-like this:
-
-```yaml
-- id: sonarr-queue
-  kind: widget
-  title: Sonarr queue
-  url: http://sonarr.lan:8989 # optional: where the title links to
-  widget:
-    type: api
-    url: http://sonarr.lan:8989/api/v3/queue
-    headers: { X-Api-Key: "${env:HOMEPAGE_SONARR_KEY}" }
-    fields:
-      - { label: Downloading, path: $.totalRecords, format: number, warnAbove: 10 }
-```
+fetches. The database and the API keep the reference, never the value: a header written as
+`X-Api-Key: ${env:HOMEPAGE_SONARR_KEY}` is stored and shown exactly like that.
 
 - `${env:NAME}` reads an environment variable. **Its name must start with `HOMEPAGE_`**, so a widget can't read any
   other variable the server has.
@@ -288,8 +260,8 @@ the store.
 - **`server/pages/db-page-store.ts`** applies those rules inside one transaction per change, behind one shared lock.
   It writes a page's sections and items back whole, renumbered.
 - **`server/db/`** opens PGlite or Postgres (`client.ts`), defines the tables (`schema.ts`), waits for Postgres
-  (`wait.ts`) and imports YAML (`import-yaml.ts`).
-- **`server/pages/yaml-format.ts`** reads and writes the 1.x YAML layout, for the import and the zip.
+  (`wait.ts`) and holds the built-in database's lock (`lock.ts`).
+- **`server/pages/widget-storage.ts`** is how a widget's settings are stored in the `items.widget` column.
 
 To change the tables, edit `server/db/schema.ts`, run `npm run db:generate`, and commit the new folder in
 `drizzle/`.
@@ -376,7 +348,6 @@ exist. The first becomes the admin.
 (`visibleTo`). People outside those groups don't see it anywhere:
 
 - it is missing from the pages, search, status checks and widget data
-- it is left out of the zip they download
 - its address answers _not found_
 
 Editors see everything, to be able to manage it.

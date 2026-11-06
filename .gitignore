@@ -10,5 +10,5 @@ web/src/route-tree.gen.ts
 # Claude Code worktrees and local state
 .claude/
 
-# Page data the app writes (DATA_DIR). examples/data is the committed sample.
+# Page data the app writes (DATA_DIR).
 /data/

@@ -76,8 +76,8 @@ export const items = pgTable(
     checkEnabled: boolean('check_enabled').notNull().default(true),
     checkUrl: text('check_url'),
     /**
-     * A widget's type and settings, in the same mapping its YAML form uses (`widgetToDisk`), so it is read back
-     * through the same checks. Secret references are kept as written. null for the other kinds.
+     * A widget's type and settings, as `widgetToStored` writes them, read back through `storedWidgetSchema`'s
+     * checks. Secret references are kept as written. null for the other kinds.
      */
     widget: jsonb('widget').$type<Record<string, unknown>>(),
     /** The groups that may see the item. Empty means everyone who may see its section. */
