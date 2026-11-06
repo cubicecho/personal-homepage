@@ -1,0 +1,17 @@
+fragment SiteLayoutFields on SiteLayout {
+  columns
+  minColumns
+  maxColumns
+}
+
+query SiteLayout {
+  siteLayout {
+    ...SiteLayoutFields
+  }
+}
+
+mutation SetLayoutColumns($columns: Int) {
+  setLayoutColumns(columns: $columns) {
+    ...SiteLayoutFields
+  }
+}

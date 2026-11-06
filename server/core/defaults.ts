@@ -74,6 +74,22 @@ export const STORE_DEFAULTS: Readonly<StoreSettings> = Object.freeze({
   dataDir: 'data',
 });
 
+/** How wide a section's grid is: the Columns setting on Settings → General. */
+export interface LayoutSettings {
+  /** How many columns a section's grid has at full width, until the site setting says otherwise. */
+  columns: number;
+  /** The fewest columns the setting may name. */
+  minColumns: number;
+  /** The most columns the setting may name, and so the widest an item can be set to. */
+  maxColumns: number;
+}
+
+export const LAYOUT_DEFAULTS: Readonly<LayoutSettings> = Object.freeze({
+  columns: 4,
+  minColumns: 1,
+  maxColumns: 8,
+});
+
 /** How big pages and items may get. Served as `Query.pageLimits`, so the web forms check the same numbers. */
 export interface PageLimitSettings {
   /** Most pages, the home page included. */

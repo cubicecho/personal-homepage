@@ -1,4 +1,4 @@
-import { SEARCH_DEFAULTS } from '../../server/core/defaults.ts';
+import { LAYOUT_DEFAULTS, SEARCH_DEFAULTS } from '../../server/core/defaults.ts';
 import { ErrorCode } from '../../server/core/errors.ts';
 import type { OpenedDatabase } from '../../server/db/client.ts';
 import { SITE_SETTINGS_ID, siteSettings } from '../../server/db/schema.ts';
@@ -88,5 +88,28 @@ describe('site settings', () => {
     expect(await prefixes()).toEqual(builtInPrefixes);
     expect(warn).toHaveBeenCalledTimes(1);
     expect(String(warn.mock.calls[0]?.[0])).toMatch(/^\[site\] /);
+  });
+
+  describe('layout columns', () => {
+    it('starts at the default, keeps a change, and goes back to the default on null', async () => {
+      expect(await site.layout()).toEqual(LAYOUT_DEFAULTS);
+      expect((await site.setLayoutColumns(6)).columns).toBe(6);
+      expect((await site.layout()).columns).toBe(6);
+      expect((await site.setLayoutColumns(null)).columns).toBe(LAYOUT_DEFAULTS.columns);
+    });
+
+    it('keeps the search settings when the columns change, and the other way round', async () => {
+      await site.setSearch({ engines: [SEARX], defaultPrefix: 's' });
+      await site.setLayoutColumns(3);
+      expect(await prefixes()).toEqual(['s']);
+      await site.setSearch(null);
+      expect((await site.layout()).columns).toBe(3);
+    });
+
+    it.each([0, LAYOUT_DEFAULTS.maxColumns + 1, 2.5])('refuses %s columns', async (columns) => {
+      await expect(site.setLayoutColumns(columns)).rejects.toMatchObject({
+        extensions: { code: ErrorCode.BadUserInput },
+      });
+    });
   });
 });

@@ -71,8 +71,10 @@ export const items = pgTable(
     description: text('description'),
     /** Set for a frame only. */
     frameHeightPx: integer('frame_height_px'),
-    /** How many grid columns the item spans: ONE to FOUR, or FULL. null (rows from before it) means the kind's default. */
-    columnSpan: text('column_span'),
+    /** Grid columns the item spans when not full width, 1 to 8. null (rows from before it) means the kind's default. */
+    columnSpan: integer('column_span'),
+    /** Whether the item takes a row of its own. null (rows from before it) means the kind's default. */
+    fullWidth: boolean('full_width'),
     checkEnabled: boolean('check_enabled').notNull().default(true),
     checkUrl: text('check_url'),
     /**
@@ -98,10 +100,7 @@ export const items = pgTable(
     check('ck_items_url', sql`${table.url} is not null or ${table.kind} = 'WIDGET'`),
     check('ck_items_widget', sql`(${table.widget} is not null) = (${table.kind} = 'WIDGET')`),
     check('ck_items_opens_in', sql`${table.opensIn} is null or ${table.opensIn} in ('NEW_TAB', 'SAME_TAB', 'APP')`),
-    check(
-      'ck_items_column_span',
-      sql`${table.columnSpan} is null or ${table.columnSpan} in ('ONE', 'TWO', 'THREE', 'FOUR', 'FULL')`,
-    ),
+    check('ck_items_column_span', sql`${table.columnSpan} is null or ${table.columnSpan} between 1 and 8`),
   ],
 );
 
@@ -112,12 +111,20 @@ export const siteSettings = pgTable(
     id: text('id').primaryKey().default(SITE_SETTINGS_ID),
     /** The launcher's web searches: `{ engines, defaultPrefix }`, or null for the defaults. */
     search: jsonb('search').$type<unknown>(),
+    /** How many columns a section's grid has at full width, or null for `LAYOUT_DEFAULTS.columns`. */
+    layoutColumns: integer('layout_columns'),
     updatedAt: timestamp('updated_at', { withTimezone: true })
       .notNull()
       .defaultNow()
       .$onUpdate(() => new Date()),
   },
-  (table) => [check('ck_site_settings_singleton', sql`${table.id} = 'site'`)],
+  (table) => [
+    check('ck_site_settings_singleton', sql`${table.id} = 'site'`),
+    check(
+      'ck_site_settings_layout_columns',
+      sql`${table.layoutColumns} is null or ${table.layoutColumns} between 1 and 8`,
+    ),
+  ],
 );
 
 /**

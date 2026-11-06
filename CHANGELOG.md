@@ -1,3 +1,19 @@
+# [3.3.0](https://github.com/cubicecho/personal-homepage/compare/v3.2.0...v3.3.0) (2026-11-06)
+
+
+### Features
+
+* let the site set its column count, and size items in those columns ([696609c](https://github.com/cubicecho/personal-homepage/commit/696609c3fae88d37e195ee61b23e45876e07bf35))
+* **web:** lay sections out in the site's columns, and tidy the cards ([9a179c1](https://github.com/cubicecho/personal-homepage/commit/9a179c1ba7aa247259a19ec65c27f78bb467cd4e))
+
+# [3.2.0](https://github.com/cubicecho/personal-homepage/compare/v3.1.1...v3.2.0) (2026-11-06)
+
+
+### Features
+
+* add the page you're on to the homepage with a bookmarklet ([6236d47](https://github.com/cubicecho/personal-homepage/commit/6236d47b6aba8a4b56f0d6b7fbacc3b3052b288c))
+* **web:** come back to the page you were opening after signing in ([4329dbd](https://github.com/cubicecho/personal-homepage/commit/4329dbdfafa33481ae6d2dfad1a5a647589e4a27))
+
 ## [3.1.1](https://github.com/cubicecho/personal-homepage/compare/v3.1.0...v3.1.1) (2026-11-06)
 
 

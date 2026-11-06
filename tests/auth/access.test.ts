@@ -99,6 +99,10 @@ describe('an instance with sign-in set up', () => {
     expect((await signedIn.gql(ACCESS, {}, bob)).data.access).toMatchObject({ canView: true, canEdit: false });
     expect(codeOf(await signedIn.gql(ADD_PAGE, { input: { title: 'Bob' } }, bob))).toBe(ErrorCode.Forbidden);
     expect(codeOf(await signedIn.gql('mutation { deletePage(slug: "ada") }', {}, bob))).toBe(ErrorCode.Forbidden);
+    expect(codeOf(await signedIn.gql('mutation { setLayoutColumns(columns: 6) { columns } }', {}, bob))).toBe(
+      ErrorCode.Forbidden,
+    );
+    expect((await signedIn.gql('{ siteLayout { columns } }', {}, bob)).data.siteLayout.columns).toBe(4);
 
     expect((await signedIn.gql(ADD_PAGE, { input: { title: 'Cy' } }, cy)).errors).toBeUndefined();
   });

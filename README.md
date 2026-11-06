@@ -11,10 +11,10 @@ A self-hosted start page for your network. Every edit is made in the web app.
   - **Frames** show a service inline on the page, at a height you set.
   - **Widgets** show data the server fetches: values picked out of a JSON API, a feed's latest entries, or the
     weather. See [Widgets](#widgets).
-- **Widths:** a section's items sit in one grid of up to four columns, fewer on a narrower screen and one on a
-  phone. A tile takes one column. A frame (full width by default) or a widget (two columns by default) can take 1 to
-  4 columns or the full width: **Width** in its dialog, or `columnSpan: 3` / `columnSpan: full` in an exported
-  page.
+- **Widths:** a section's items sit in one grid with as many columns as **Settings → General → Columns** says
+  (1–8, default 4), fewer on a narrower screen and one on a phone. A tile takes one column. A frame (full width by
+  default) or a widget (two columns by default) can take 1 column up to that setting, or the full width: **Width**
+  in its dialog. An item set wider than the page has is drawn as wide as the page, and keeps its setting.
 - **Status dots** on items show whether each service answers, checked by the server.
 - **Search:** press Ctrl+K (or ⌘K), or `/`, or just start typing anywhere. It finds items and pages on every
   page, opens addresses, and sends anything else to a web search. Start with `!g` or another prefix to pick the
@@ -239,6 +239,19 @@ extra_hosts:
 ```
 
 Using the IP address in `DOCKHAND_URL` works too, but only fixes Dockhand.
+
+## Bookmarklet
+
+**Settings → Bookmarklet** has an **Add to homepage** button to drag to your browser's bookmarks bar. Click
+that bookmark on any site, and the homepage opens at `/add` with the site's address, title and description
+filled in. **Fill in** then adds its icon. Pick a page and section, and save.
+
+- The bookmarklet opens `APP_URL`, or the address recorded when sign-in was paired, or else the address you
+  had Settings open at. Settings warns when that is `localhost`, which only works on the same machine.
+- On a phone, copy the code from the same page and paste it as a bookmark's address.
+- Signing in on the way keeps the `/add?…` address, so you land on the filled-in dialog afterwards.
+- `/add` accepts only `http` and `https` addresses. A few sites with strict security settings stop
+  bookmarklets from running; use **Add item** there.
 
 ## The API
 
