@@ -55,7 +55,7 @@ export function ItemMenu({ page, section, item, index, onEdit }: ItemMenuProps) 
     <>
       <Menu>
         <MenuTrigger asChild>
-          <Button variant="outline" size="icon-sm" aria-label={`Actions for ${item.title}`} iconSlot={<Ellipsis />} />
+          <Button variant="ghost" size="icon-xs" aria-label={`Actions for ${item.title}`} iconSlot={<Ellipsis />} />
         </MenuTrigger>
         <MenuContent align="end">
           <MenuItem iconSlot={<Pencil />} label="Edit" onSelect={onEdit} />
