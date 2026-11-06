@@ -13,12 +13,17 @@ A self-hosted start page for your network. Every edit is made in the web app.
     weather. See [Widgets](#widgets).
 - **Widths:** a section's items sit in one grid of up to four columns, fewer on a narrower screen and one on a
   phone. A tile takes one column. A frame (full width by default) or a widget (two columns by default) can take 1 to
-  4 columns or the full width: **Width** in its dialog, or `columnSpan: 3` / `columnSpan: full` in an exported
-  page.
+  4 columns or the full width: **Width** in its dialog (`columnSpan` in the API).
+- **Moving things:** pages, sections and items move up and down from their **⋯** menus. **Move…** on an item puts
+  it in another section, or on another page with everything about it.
 - **Status dots** on items show whether each service answers, checked by the server.
 - **Search:** press Ctrl+K (or ⌘K), or `/`, or just start typing anywhere. It finds items and pages on every
   page, opens addresses, and sends anything else to a web search. Start with `!g` or another prefix to pick the
   search engine.
+- **The sidebar folds** to a rail of icons, with the button at its foot or Ctrl+B (⌘B). Each browser remembers.
+  On a phone it is a bar across the top instead.
+- **Discovery** suggests apps it finds on your network, and **sign-in** through heautou limits who may see and
+  change what. See [Discovery](#discovery) and [Sign-in](#sign-in).
 
 Pages are kept in a database: a built-in one (PGlite, which is Postgres running inside the server) in `DATA_DIR`,
 or your own Postgres server. The web app reads and writes them through a GraphQL API.
@@ -47,6 +52,20 @@ keeps its data in `/data`; `PORT` in `.env` chooses the port on the host.
 
 Released images are published to GHCR as `ghcr.io/cubicecho/personal-homepage`, tagged with the version and
 `latest`. A `feat:` or `fix:` commit on `main` cuts a release once CI passes.
+
+## Environment variables
+
+All optional. Each is described in `.env.example` and in the section linked.
+
+| Variable                                                                                                               | What it sets                                                                    | More                                          |
+| ---------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- | --------------------------------------------- |
+| `PORT`                                                                                                                 | Port the server listens on (default 3000). `npm run dev` puts the API on 8787.  | [Quick start](#quick-start)                   |
+| `DATA_DIR`                                                                                                             | The built-in database and icon caches (default `./data`, `/data` in the image). | [Where pages are kept](#where-pages-are-kept) |
+| `DATABASE_URL`, `DB_CONNECT_TIMEOUT_MS`                                                                                | Postgres instead of the built-in database, and how long to wait for it.         | [Where pages are kept](#where-pages-are-kept) |
+| `TRUST_PROXY`                                                                                                          | Proxies in front that may set X-Forwarded-For (default none).                   | [Security](#security)                         |
+| `APP_URL`, `SERVER_URL`, `BETTER_AUTH_SECRET`, `OIDC_*`, `FORWARD_AUTH_TRUSTED_PROXIES`, `ADMIN_GROUPS`, `PUBLIC_VIEW` | Sign-in.                                                                        | [Sign-in](#sign-in)                           |
+| `WEATHER_API_URL`, `HOMEPAGE_*`                                                                                        | A self-hosted Open-Meteo for weather widgets, and secrets widgets may use.      | [Widgets](#widgets)                           |
+| `DISCOVERY_MDNS`, `DOCKHAND_URL`, `DOCKHAND_TOKEN`, `DOCKER_SOCKET`, `DISCOVERY_DOCKER_HOST`                           | Where apps are discovered.                                                      | [Discovery](#discovery)                       |
 
 ## Where pages are kept
 
@@ -149,7 +168,8 @@ fetches. The database and the API keep the reference, never the value: a header 
   other variable the server has.
 - `${file:/path}` reads a file, trimmed, such as a Docker secret. **It must be in `/run/secrets` or
   `<DATA_DIR>/secrets`.**
-- These limits matter because there is no sign-in yet: anyone who can edit a widget chooses where its requests go.
+- These limits matter because anyone who can edit a widget chooses where its requests go: everyone on an instance
+  with no sign-in, and editors once sign-in is set up.
 - Anything a fetch sends back is scrubbed of the secrets it used: the widget's values, the raw JSON of a test, and
   every error message.
 
@@ -168,6 +188,10 @@ nothing is proxied.
   **Open in the browser**.
 - **Use addresses that work from every device you'll open the homepage on.** `http://localhost:8096` means a
   different machine on your phone.
+- **A framed app that grabs focus doesn't break the page.** Some apps (Actual Budget, for one) keep focusing
+  themselves, which used to close every menu on the page as it opened. While a menu, dialog or list is open,
+  frames can't take focus away from it, and clicking a frame still closes the menu. This comes from cubeui's
+  overlays.
 
 ## Discovery
 
@@ -217,7 +241,7 @@ Apps are found in three places:
 services:
   personal-homepage:
     image: ghcr.io/cubicecho/personal-homepage:latest
-    network_mode: host # for mDNS; drop `ports:`, the app listens on PORT on the host
+    network_mode: host # for mDNS; drop `ports:`. The app listens on PORT on the host (3000 by default)
     environment:
       DOCKHAND_URL: http://dockhand.lan:3000
       DOCKHAND_TOKEN: ${DOCKHAND_TOKEN}
@@ -236,15 +260,25 @@ GraphQL at `/graphql`. In development, GraphiQL is served there too. `schema.gra
   `iconSearch(query)`, `searchEngines`, `widgetData(pageSlug, itemId)` and `widgetPreview(input)`.
 - **Page mutations:** `createPage`, `updatePage`, `deletePage`, `movePage`.
 - **Section mutations:** `addSection`, `updateSection`, `removeSection`, `moveSection`.
-- **Item mutations:** `addItem`, `updateItem`, `removeItem`, `moveItem`. `moveItem` can move an item into another
-  section.
+- **Item mutations:** `addItem`, `updateItem`, `removeItem`, `moveItem` (within a page, into another section too)
+  and `moveItemToPage` (to another page, returning both pages and the item's id there).
 - **Settings:** `setSearchEngines`.
 - **Discovery (editors only):** `discoveredApps(includeDismissed)`, `discoverySources` and `describeUrl(url)`; the
   mutations `rescanDiscovery` and `dismissDiscoveredApp`. `ItemInput.discoveredId` links an item to the app it
   came from.
+- **Sign-in:** `access` (who is asking and what they may do), `authConfig`, `getSession` and `listSessions`; the
+  mutations `verifyOneTimeToken`, `signOut`, `revokeSession`, `revokeSessions` and `revokeOtherSessions`.
+- **Pairing:** `ssoSetup`; the mutations `pairSso`, `updateSsoAppUrl` and `unpairSso`.
 
-Failures carry `extensions.code`: `BAD_USER_INPUT`, `NOT_FOUND` or `QUERY_TOO_COMPLEX`. `GET /healthz` answers
-`{ ok, version }`, or 503 when the database doesn't answer.
+Once sign-in is set up, every page, section, item, settings and discovery mutation is for editors. Failures carry `extensions.code`: `BAD_USER_INPUT`,
+`NOT_FOUND`, `UNAUTHENTICATED`, `FORBIDDEN`, `CONFLICT`, `TOO_MANY_REQUESTS` or `QUERY_TOO_COMPLEX`.
+
+Besides `/graphql`, the server answers:
+
+- `GET /healthz`: `{ ok, version }`, or 503 when the database doesn't answer.
+- `GET /icons/favicon/<page>/<item>` and `GET /icons/discovered/<id>`: favicons the server fetched, behind signed
+  links.
+- `GET /sso/oidc` and `GET /api/auth/callback/oidc`: the start and the callback of an OIDC sign-in.
 
 ## How storage is built
 
