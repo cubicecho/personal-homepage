@@ -6,8 +6,8 @@ import { Menu, MenuContent, MenuItem, MenuSeparator, MenuTrigger } from '@/compo
 import { useToast } from '@/components/ui/toast';
 import { ArrowDown, ArrowRightLeft, ArrowUp } from '@/core/app-icons';
 import { messageOf } from '@/lib/error-message';
-import { MoveItemDialog } from '@/sections/move-item-dialog';
-import { type Item, type Page, type Section, useMoveItem, useRemoveItem } from './use-pages';
+import { MoveItemDialog } from './move-item-dialog';
+import { type Item, type Page, type Section, useMoveItem, usePages, useRemoveItem } from './use-pages';
 
 interface ItemMenuProps {
   page: Page;
@@ -20,16 +20,17 @@ interface ItemMenuProps {
   onEdit: () => void;
 }
 
-/** The ⋯ menu on an item: edit, move up or down within its section or to another, remove. */
+/** The ⋯ menu on an item: edit, move up or down within its section, move to another section or page, remove. */
 export function ItemMenu({ page, section, item, index, onEdit }: ItemMenuProps) {
   const toast = useToast();
   const moveItem = useMoveItem();
   const removeItem = useRemoveItem();
+  const pageCount = usePages().data?.length ?? 1;
   const [isConfirmingRemove, setIsConfirmingRemove] = useState(false);
   const [moveSession, setMoveSession] = useState<number | null>(null);
   const isFirst = index === 0;
   const isLast = index === section.items.length - 1;
-  const hasOtherSections = page.sections.length > 1;
+  const hasSomewhereElse = page.sections.length > 1 || pageCount > 1;
 
   /**
    * Moves the item one place within its section, and says so when the server refuses.
@@ -61,10 +62,10 @@ export function ItemMenu({ page, section, item, index, onEdit }: ItemMenuProps) 
           <MenuItem iconSlot={<Pencil />} label="Edit" onSelect={onEdit} />
           <MenuItem iconSlot={<ArrowUp />} label="Move up" disabled={isFirst} onSelect={() => move(index - 1)} />
           <MenuItem iconSlot={<ArrowDown />} label="Move down" disabled={isLast} onSelect={() => move(index + 1)} />
-          {hasOtherSections ? (
+          {hasSomewhereElse ? (
             <MenuItem
               iconSlot={<ArrowRightLeft />}
-              label="Move to section…"
+              label="Move…"
               onSelect={() => setMoveSession((count) => (count ?? 0) + 1)}
             />
           ) : null}
