@@ -125,6 +125,16 @@ describe('app', () => {
     expect(reset.data.setSearchEngines.length).toBeGreaterThan(1);
   });
 
+  it('serves the grid layout, and changes its columns', async () => {
+    const { data } = await post('{ siteLayout { columns minColumns maxColumns } }');
+    expect(data.siteLayout).toEqual({ columns: 4, minColumns: 1, maxColumns: 8 });
+    const set = await post('mutation { setLayoutColumns(columns: 6) { columns } }');
+    expect(set.data.setLayoutColumns.columns).toBe(6);
+    const refused = await post('mutation { setLayoutColumns(columns: 9) { columns } }');
+    expect(refused.errors[0].extensions.code).toBe(ErrorCode.BadUserInput);
+    await post('mutation { setLayoutColumns(columns: null) { columns } }');
+  });
+
   it('refuses a script URL with BAD_USER_INPUT', async () => {
     const { errors } = await post(
       'mutation ($input: ItemInput!) { addItem(pageSlug: "home", input: $input) { slug } }',

@@ -1,5 +1,5 @@
-// Site-wide settings that are not pages, kept in the one row of `site_settings`. So far that is the
-// launcher's web searches, stored as written:
+// Site-wide settings that are not pages, kept in the one row of `site_settings`: how many columns a
+// section's grid has (null for LAYOUT_DEFAULTS.columns), and the launcher's web searches, stored as written:
 //
 //   { "defaultPrefix": "s", "engines": [{ "prefix": "s", "name": "SearXNG", "url": "http://searx.local/search?q={query}" }] }
 //
@@ -8,7 +8,7 @@
 // longer fits (it came from an import, or a rule changed) is logged once (`[site]`) and the defaults used.
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
-import { SEARCH_DEFAULTS, type SearchEngineSettings } from '../core/defaults.ts';
+import { LAYOUT_DEFAULTS, type LayoutSettings, SEARCH_DEFAULTS, type SearchEngineSettings } from '../core/defaults.ts';
 import { badInput } from '../core/errors.ts';
 import type { Database } from '../db/client.ts';
 import { SITE_SETTINGS_ID, siteSettings } from '../db/schema.ts';
@@ -55,6 +55,20 @@ export interface SiteSettings {
    * @throws BAD_USER_INPUT when the settings don't fit the rules above.
    */
   setSearch(search: unknown): Promise<SearchEngine[]>;
+  /**
+   * Gives how a section's grid is laid out.
+   *
+   * @returns The columns in use, and the bounds the setting may take.
+   */
+  layout(): Promise<LayoutSettings>;
+  /**
+   * Sets how many columns a section's grid has.
+   *
+   * @param columns - From `LAYOUT_DEFAULTS.minColumns` to `maxColumns`; null to go back to the default.
+   * @returns The layout now in use.
+   * @throws BAD_USER_INPUT when the number is outside the bounds or not whole.
+   */
+  setLayoutColumns(columns: number | null): Promise<LayoutSettings>;
 }
 
 const engineSchema = z.object({
@@ -175,6 +189,28 @@ export function createSiteSettings(db: Database): SiteSettings {
         .values({ id: SITE_SETTINGS_ID, search: stored })
         .onConflictDoUpdate({ target: siteSettings.id, set: { search: stored } });
       return resolved.engines;
+    },
+
+    layout: async () => {
+      const [row] = await db
+        .select({ layoutColumns: siteSettings.layoutColumns })
+        .from(siteSettings)
+        .where(eq(siteSettings.id, SITE_SETTINGS_ID));
+      return { ...LAYOUT_DEFAULTS, columns: row?.layoutColumns ?? LAYOUT_DEFAULTS.columns };
+    },
+
+    setLayoutColumns: async (columns) => {
+      const { minColumns, maxColumns } = LAYOUT_DEFAULTS;
+      const isWithinBounds =
+        columns === null || (Number.isInteger(columns) && columns >= minColumns && columns <= maxColumns);
+      if (isWithinBounds === false) {
+        throw badInput(`columns: Use a whole number from ${minColumns} to ${maxColumns}.`);
+      }
+      await db
+        .insert(siteSettings)
+        .values({ id: SITE_SETTINGS_ID, layoutColumns: columns })
+        .onConflictDoUpdate({ target: siteSettings.id, set: { layoutColumns: columns } });
+      return { ...LAYOUT_DEFAULTS, columns: columns ?? LAYOUT_DEFAULTS.columns };
     },
   };
 }
