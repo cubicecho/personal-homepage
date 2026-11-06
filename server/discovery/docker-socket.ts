@@ -26,6 +26,8 @@ const LOCAL_HOST_KEY = 'local';
 /** The largest answer read from the socket, in bytes: a busy host lists a few hundred containers. */
 const MAX_LIST_BYTES = 8_388_608;
 const HTTP_OK = 200;
+/** The errors opening a Unix socket fails with when it isn't there, or isn't ours to read. */
+const SocketCode = { Missing: 'ENOENT', Denied: 'EACCES' } as const;
 
 const containerSchema = z.object({
   Names: z.array(z.string()).default([]),
@@ -72,15 +74,33 @@ function socketJson(socketPath: string, path: string, timeoutMs: number): Promis
         }
         try {
           resolve(JSON.parse(Buffer.concat(chunks).toString('utf-8')));
-        } catch (error) {
-          reject(error);
+        } catch {
+          reject(new Error(`The Docker socket's answer to ${path} wasn't JSON. Is ${socketPath} Docker's socket?`));
         }
       });
     });
     req.on('timeout', () => req.destroy(new Error('The Docker socket did not answer in time.')));
-    req.on('error', reject);
+    req.on('error', (error) => reject(new Error(socketErrorMessage(socketPath, error))));
     req.end();
   });
+}
+
+/**
+ * Explains why the socket couldn't be read.
+ *
+ * @param socketPath - The socket.
+ * @param error - What the request failed with.
+ * @returns A sentence naming the socket and what to change.
+ */
+function socketErrorMessage(socketPath: string, error: Error): string {
+  const code = 'code' in error ? String(error.code) : '';
+  if (code === SocketCode.Missing) {
+    return `There is no Docker socket at ${socketPath}. Mount it read-only (/var/run/docker.sock:/var/run/docker.sock:ro), or set DOCKER_SOCKET.`;
+  }
+  if (code === SocketCode.Denied) {
+    return `This server isn't allowed to read ${socketPath}. Give the container the socket's group (group_add with the docker group's id).`;
+  }
+  return `Couldn't read the Docker socket at ${socketPath}: ${error.message}`;
 }
 
 /**
