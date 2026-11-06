@@ -1,0 +1,85 @@
+fragment ItemFields on Item {
+  id
+  kind
+  title
+  url
+  icon
+  description
+  frameHeightPx
+}
+
+fragment PageFields on Page {
+  slug
+  title
+  icon
+  isHome
+  items {
+    ...ItemFields
+  }
+}
+
+query Pages {
+  pages {
+    ...PageFields
+  }
+}
+
+query PageLimits {
+  pageLimits {
+    maxPages
+    maxItemsPerPage
+    maxTitleLength
+    maxDescriptionLength
+    maxUrlLength
+    maxSlugLength
+    minFrameHeightPx
+    maxFrameHeightPx
+    defaultFrameHeightPx
+  }
+}
+
+mutation CreatePage($input: CreatePageInput!) {
+  createPage(input: $input) {
+    ...PageFields
+  }
+}
+
+mutation UpdatePage($slug: ID!, $input: UpdatePageInput!) {
+  updatePage(slug: $slug, input: $input) {
+    ...PageFields
+  }
+}
+
+mutation DeletePage($slug: ID!) {
+  deletePage(slug: $slug)
+}
+
+mutation MovePage($slug: ID!, $toIndex: Int!) {
+  movePage(slug: $slug, toIndex: $toIndex) {
+    ...PageFields
+  }
+}
+
+mutation AddItem($pageSlug: ID!, $input: ItemInput!) {
+  addItem(pageSlug: $pageSlug, input: $input) {
+    ...PageFields
+  }
+}
+
+mutation UpdateItem($pageSlug: ID!, $id: ID!, $input: ItemInput!) {
+  updateItem(pageSlug: $pageSlug, id: $id, input: $input) {
+    ...PageFields
+  }
+}
+
+mutation RemoveItem($pageSlug: ID!, $id: ID!) {
+  removeItem(pageSlug: $pageSlug, id: $id) {
+    ...PageFields
+  }
+}
+
+mutation MoveItem($pageSlug: ID!, $id: ID!, $toIndex: Int!) {
+  moveItem(pageSlug: $pageSlug, id: $id, toIndex: $toIndex) {
+    ...PageFields
+  }
+}

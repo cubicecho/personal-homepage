@@ -1,0 +1,15 @@
+title: Tools
+icon: terminal
+items:
+  - id: kanban
+    kind: app
+    title: Kanban
+    url: http://tools.local:3000
+    icon: kanban
+    description: Opens framed across the page
+  - id: grafana
+    kind: frame
+    title: Grafana
+    url: http://nas.local:3001/d/home?kiosk
+    icon: chart
+    frameHeightPx: 480

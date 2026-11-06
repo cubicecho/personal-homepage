@@ -1,0 +1,2 @@
+# The order pages appear in the sidebar, after Home (which is always first).
+pageOrder: [media, tools]

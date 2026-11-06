@@ -1,0 +1,22 @@
+# The homepage, with its page files in a named volume (.env is read from beside this file):
+#
+#   docker compose up -d --build
+#
+# To edit the YAML by hand instead, swap the volume for a bind mount such as ./data:/data.
+# The directory must be writable by uid 1000, the image's node user.
+name: personal-homepage
+services:
+  personal-homepage:
+    image: ghcr.io/cubicecho/personal-homepage:latest
+    build: .
+    restart: unless-stopped
+    environment:
+      TRUST_PROXY: ${TRUST_PROXY:-false}
+      NODE_ENV: production
+    volumes:
+      - homepage_data:/data
+    ports:
+      - "${PORT:-3000}:3000"
+
+volumes:
+  homepage_data:
