@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { canStartShortcut } from '@/search/hotkeys';
+import { canStartShortcut, FOLD_CHORD, type KeyPress, matchesChord } from '@/search/hotkeys';
 
 /** Where this browser remembers whether the sidebar is folded. */
 const FOLD_STORAGE_KEY = 'homepage.sidebar-folded';
@@ -38,9 +38,8 @@ function writeFolded(folded: boolean): void {
  * @param event - The key press.
  * @returns True for the chord, with no other modifier.
  */
-export function isFoldChord(event: KeyboardEvent): boolean {
-  const hasCommandKey = event.ctrlKey || event.metaKey;
-  return hasCommandKey && event.altKey === false && event.shiftKey === false && event.key.toLowerCase() === 'b';
+export function isFoldChord(event: KeyPress): boolean {
+  return matchesChord(event, FOLD_CHORD);
 }
 
 /**

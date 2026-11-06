@@ -20,6 +20,7 @@ export {
   Gauge,
   Globe,
   ImageIcon,
+  Keyboard,
   LayoutGrid,
   Link,
   PanelsTopLeft,

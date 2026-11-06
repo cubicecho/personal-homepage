@@ -8,7 +8,7 @@ import {
   useParams,
   useRouterState,
 } from '@tanstack/react-router';
-import { House, LogOut } from 'lucide-react';
+import { Ellipsis, House, LogOut } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { rememberReturnTo } from '@/auth/return-to';
 import { ACCESS_KEY, useAccess, useCanEdit, useSignOut } from '@/auth/use-access';
@@ -27,17 +27,19 @@ import {
 import { SidebarLayout } from '@/components/split-layout';
 import { Button } from '@/components/ui/button';
 import { Plus, Settings } from '@/components/ui/icons';
-import { Menu, MenuContent, MenuItem, MenuTrigger } from '@/components/ui/menu';
+import { Menu, MenuContent, MenuItem, MenuSeparator, MenuTrigger } from '@/components/ui/menu';
 import { ThemePicker } from '@/components/ui/theme-picker';
 import { useThemePreference } from '@/components/ui/theme-preference';
-import { LayoutGrid } from '@/core/app-icons';
+import { Keyboard, LayoutGrid } from '@/core/app-icons';
 import { setUnauthenticatedHandler } from '@/core/gql';
 import { iconElement } from '@/core/page-icons';
 import { PageDialog } from '@/pages/page-dialog';
 import { type Page, usePages } from '@/pages/use-pages';
-import { commandKeyLabel } from '@/search/hotkeys';
+import { chordLabel, FOLD_CHORD, SHORTCUTS_CHORD } from '@/search/hotkeys';
 import { SearchButton, SearchProvider } from '@/search/search-launcher';
-import { ThemeMenu } from '@/shell/theme-menu';
+import { EditModeProvider, EditModeToggle } from '@/shell/edit-mode';
+import { ShortcutsProvider, useShortcuts } from '@/shell/shortcuts-dialog';
+import { ThemeMenu, ThemeMenuItems } from '@/shell/theme-menu';
 import { useSidebarFold } from '@/shell/use-sidebar-fold';
 
 const SidebarLink = createLink(SidebarNavItem);
@@ -124,8 +126,11 @@ function AccountRows({ isSettings }: { isSettings: boolean }) {
   );
 }
 
+/** What the keyboard shortcuts row and menu item are called. */
+const SHORTCUTS_LABEL = 'Keyboard shortcuts';
+
 /**
- * The sidebar's footer: settings, the zip download, the theme and the fold button, as icons while folded.
+ * The sidebar's footer: settings, the keyboard shortcuts, the theme and the fold button, as icons while folded.
  *
  * @param props - Where the browser is.
  * @param props.isSettings - Whether the settings page is open.
@@ -133,16 +138,70 @@ function AccountRows({ isSettings }: { isSettings: boolean }) {
  */
 function SidebarFooter({ isSettings }: { isSettings: boolean }) {
   const { collapsed } = useSidebar();
-  const shortcut = `${commandKeyLabel()} B`;
+  const { openShortcuts } = useShortcuts();
+  const shortcut = chordLabel(FOLD_CHORD);
   return (
     <div className={collapsed ? 'flex flex-col items-center gap-2' : 'flex flex-col gap-2'}>
       <AccountRows isSettings={isSettings} />
+      <SidebarNavItem
+        label={`${SHORTCUTS_LABEL} (${chordLabel(SHORTCUTS_CHORD)})`}
+        iconSlot={<Keyboard />}
+        onClick={openShortcuts}
+      />
       {collapsed ? <ThemeMenu /> : <ThemePicker variant="compact" />}
       <SidebarCollapseButton
         collapseLabel={`Collapse sidebar (${shortcut})`}
         expandLabel={`Expand sidebar (${shortcut})`}
       />
     </div>
+  );
+}
+
+/**
+ * The phone bar's overflow: everything the sidebar's footer holds, which the bar has no room for one by one.
+ *
+ * @param props - What the menu offers.
+ * @param props.pages - Every page, listed when the bar can't show them all; empty otherwise.
+ * @param props.linkTo - The router link props for a page.
+ * @param props.onNewPage - Opens the new-page dialog; left out for someone who can't edit.
+ * @returns The More button and its menu.
+ */
+function BarMoreMenu({
+  pages,
+  linkTo,
+  onNewPage,
+}: {
+  pages: readonly Page[];
+  linkTo: (page: Page) => { to: '/' } | { to: '/pages/$slug'; params: { slug: string } };
+  onNewPage: (() => void) | undefined;
+}) {
+  const { openShortcuts } = useShortcuts();
+  return (
+    <Menu>
+      <MenuTrigger asChild>
+        <Button variant="outline" size="icon-sm" aria-label="More" iconSlot={<Ellipsis />} />
+      </MenuTrigger>
+      <MenuContent align="end">
+        <MenuItem iconSlot={<Settings />} label="Settings" linkSlot={<Link to={SETTINGS_PATH} />} />
+        {onNewPage === undefined ? null : <MenuItem iconSlot={<Plus />} label="New page" onSelect={onNewPage} />}
+        <MenuItem iconSlot={<Keyboard />} label={SHORTCUTS_LABEL} onSelect={openShortcuts} />
+        <MenuSeparator />
+        <ThemeMenuItems />
+        {pages.length === 0 ? null : (
+          <>
+            <MenuSeparator />
+            {pages.map((page) => (
+              <MenuItem
+                key={page.slug}
+                iconSlot={pageIcon(page)}
+                label={page.title}
+                linkSlot={<Link {...linkTo(page)} />}
+              />
+            ))}
+          </>
+        )}
+      </MenuContent>
+    </Menu>
   );
 }
 
@@ -237,122 +296,96 @@ function Shell({ isSettings }: { isSettings: boolean }) {
 
   return (
     <SearchProvider>
-      <SidebarLayout
-        className="h-svh"
-        sidebarPosition="start"
-        sidebarWidth="auto"
-        divider="none"
-        sidebarHideBelow="md"
-        brandSlot={<Brand compact />}
-        navLabel="Pages"
-        navSlot={barPages.map((page) => (
-          <BarLink
-            key={page.slug}
-            {...linkTo(page)}
-            label={page.title}
-            iconSlot={pageIcon(page)}
-            active={page.slug === currentSlug}
-          />
-        ))}
-        actionSlot={
-          <>
-            <SearchButton variant="icon" />
-            <Button
-              variant="outline"
-              size="icon-sm"
-              aria-label="Settings"
-              iconSlot={<Settings />}
-              linkSlot={<Link to={SETTINGS_PATH} />}
-            />
-            {hasMorePages ? (
-              <Menu>
-                <MenuTrigger asChild>
-                  <Button variant="outline" size="icon-sm" aria-label="All pages" iconSlot={<LayoutGrid />} />
-                </MenuTrigger>
-                <MenuContent align="end">
-                  {pages.map((page) => (
-                    <MenuItem
-                      key={page.slug}
-                      iconSlot={pageIcon(page)}
-                      label={page.title}
-                      linkSlot={<Link {...linkTo(page)} />}
-                    />
-                  ))}
-                </MenuContent>
-              </Menu>
-            ) : null}
-            {canEdit ? (
-              <Button
-                variant="outline"
-                size="icon-sm"
-                aria-label={newPageLabel}
-                iconSlot={<Plus />}
-                onClick={startCreating}
+      <EditModeProvider>
+        <ShortcutsProvider>
+          <SidebarLayout
+            className="h-svh"
+            sidebarPosition="start"
+            sidebarWidth="auto"
+            divider="none"
+            sidebarHideBelow="md"
+            brandSlot={<Brand compact />}
+            navLabel="Pages"
+            navSlot={barPages.map((page) => (
+              <BarLink
+                key={page.slug}
+                {...linkTo(page)}
+                label={page.title}
+                iconSlot={pageIcon(page)}
+                active={page.slug === currentSlug}
               />
-            ) : null}
-            <div className="w-28">
-              <ThemePicker variant="compact" />
-            </div>
-          </>
-        }
-        sidebarSlot={
-          <Sidebar
-            label="Main"
-            collapsed={isFolded}
-            onCollapsedChange={setFolded}
-            headerSlot={<SidebarHeader />}
-            contentSlot={
+            ))}
+            actionSlot={
               <>
-                <SidebarSection
-                  as="nav"
-                  title="Pages"
-                  actionSlot={
-                    canEdit ? (
-                      <Button
-                        variant="outline"
-                        size="icon-xs"
-                        aria-label={newPageLabel}
-                        iconSlot={<Plus />}
-                        onClick={startCreating}
-                      />
-                    ) : null
-                  }
-                  status={
-                    <QueryState
-                      compact
-                      query={query}
-                      what="your pages"
-                      count={pages.length}
-                      emptySlot={<EmptyState compact title="No pages yet." className="px-2" />}
-                    />
-                  }
-                  contentSlot={pages.map((page) => (
-                    <SidebarLink
-                      key={page.slug}
-                      {...linkTo(page)}
-                      label={page.title}
-                      iconSlot={pageIcon(page)}
-                      count={page.items.length === 0 ? undefined : page.items.length}
-                      active={page.slug === currentSlug}
-                    />
-                  ))}
+                <SearchButton variant="icon" />
+                <EditModeToggle variant="icon" />
+                <BarMoreMenu
+                  pages={hasMorePages ? pages : []}
+                  linkTo={linkTo}
+                  onNewPage={canEdit ? startCreating : undefined}
                 />
-                {canEdit ? <FoldedNewPageRow label={newPageLabel} onPress={startCreating} /> : null}
               </>
             }
-            footerSlot={<SidebarFooter isSettings={isSettings} />}
+            sidebarSlot={
+              <Sidebar
+                label="Main"
+                collapsed={isFolded}
+                onCollapsedChange={setFolded}
+                headerSlot={<SidebarHeader />}
+                contentSlot={
+                  <>
+                    <SidebarSection
+                      as="nav"
+                      title="Pages"
+                      actionSlot={
+                        canEdit ? (
+                          <Button
+                            variant="outline"
+                            size="icon-xs"
+                            aria-label={newPageLabel}
+                            iconSlot={<Plus />}
+                            onClick={startCreating}
+                          />
+                        ) : null
+                      }
+                      status={
+                        <QueryState
+                          compact
+                          query={query}
+                          what="your pages"
+                          count={pages.length}
+                          emptySlot={<EmptyState compact title="No pages yet." className="px-2" />}
+                        />
+                      }
+                      contentSlot={pages.map((page) => (
+                        <SidebarLink
+                          key={page.slug}
+                          {...linkTo(page)}
+                          label={page.title}
+                          iconSlot={pageIcon(page)}
+                          count={page.items.length === 0 ? undefined : page.items.length}
+                          active={page.slug === currentSlug}
+                        />
+                      ))}
+                    />
+                    {canEdit ? <FoldedNewPageRow label={newPageLabel} onPress={startCreating} /> : null}
+                  </>
+                }
+                footerSlot={<SidebarFooter isSettings={isSettings} />}
+              />
+            }
+            contentSlot={<Outlet />}
           />
-        }
-        contentSlot={<Outlet />}
-      />
-      {isCreating ? (
-        <PageDialog
-          key={createSession}
-          open
-          onOpenChange={setIsCreating}
-          onSaved={(page) => void navigate({ to: '/pages/$slug', params: { slug: page.slug } })}
-        />
-      ) : null}
+          {isCreating ? (
+            <PageDialog
+              key={createSession}
+              open
+              onOpenChange={setIsCreating}
+              onSaved={(page) => void navigate({ to: '/pages/$slug', params: { slug: page.slug } })}
+            />
+          ) : null}
+        </ShortcutsProvider>
+      </EditModeProvider>
     </SearchProvider>
   );
 }

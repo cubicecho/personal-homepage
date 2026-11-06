@@ -12,6 +12,29 @@ const THEMES = {
 } as const satisfies Record<ThemePreference, { label: string; Glyph: unknown }>;
 
 /**
+ * The three theme choices as menu rows, the current one checked, for any menu that offers them.
+ *
+ * @returns The radio group.
+ */
+export function ThemeMenuItems() {
+  const [theme, setTheme] = useThemePreference();
+  return (
+    <MenuRadioGroup
+      value={theme}
+      onValueChange={(next) => {
+        if (isThemePreference(next)) {
+          setTheme(next);
+        }
+      }}
+    >
+      {Object.entries(THEMES).map(([value, { label, Glyph }]) => (
+        <MenuRadioItem key={value} value={value} label={label} iconSlot={<Glyph />} />
+      ))}
+    </MenuRadioGroup>
+  );
+}
+
+/**
  * The theme choice as one icon button with a menu: what the folded sidebar has room for.
  *
  * @remarks
@@ -19,7 +42,7 @@ const THEMES = {
  * offers all three, the current one checked. It reads and stores the same preference as `ThemePicker`.
  */
 export function ThemeMenu() {
-  const [theme, setTheme] = useThemePreference();
+  const [theme] = useThemePreference();
   const current = THEMES[theme];
   const name = `Theme: ${current.label}`;
   return (
@@ -28,18 +51,7 @@ export function ThemeMenu() {
         <Button variant="ghost" size="icon-sm" aria-label={name} hint={name} iconSlot={<current.Glyph />} />
       </MenuTrigger>
       <MenuContent side="right" align="end">
-        <MenuRadioGroup
-          value={theme}
-          onValueChange={(next) => {
-            if (isThemePreference(next)) {
-              setTheme(next);
-            }
-          }}
-        >
-          {Object.entries(THEMES).map(([value, { label, Glyph }]) => (
-            <MenuRadioItem key={value} value={value} label={label} iconSlot={<Glyph />} />
-          ))}
-        </MenuRadioGroup>
+        <ThemeMenuItems />
       </MenuContent>
     </Menu>
   );
