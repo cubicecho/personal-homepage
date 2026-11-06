@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { ItemInput, ItemKind, OpensIn } from '@/__generated__/graphql';
-import { InputField, NumberField, TextareaField, useAppForm } from '@/components/app-form';
+import { InputField, NumberField, SwitchField, TextareaField, useAppForm } from '@/components/app-form';
 import { DialogLayout } from '@/components/dialog-layout';
 import { RadioGroupField, type RadioOption } from '@/components/radio-group-field';
 import { Alert } from '@/components/ui/alert';
@@ -30,6 +30,8 @@ interface ItemDraft {
   icon: string | null;
   description: string;
   frameHeightPx: number | null;
+  checkEnabled: boolean;
+  checkUrl: string;
 }
 
 const KIND_OPTIONS: readonly RadioOption[] = Object.entries(ITEM_KINDS).map(([kind, { Glyph, label, summary }]) => ({
@@ -52,7 +54,8 @@ const OPENS_IN_OPTIONS: readonly RadioOption[] = Object.entries(OPENS_IN).map(
  * Turns the form's values into the API's input.
  *
  * @param draft - The form's values.
- * @returns The input: trimmed, a blank description as null, and the height only for a frame.
+ * @returns The input: trimmed, a blank description as null, and the height only for a frame. The check
+ * address is kept while checking is off, so turning it back on finds it again.
  */
 function toInput(draft: ItemDraft): ItemInput {
   const description = draft.description.trim();
@@ -65,6 +68,8 @@ function toInput(draft: ItemDraft): ItemInput {
     icon: draft.icon,
     description: description === '' ? null : description,
     frameHeightPx: isFrame ? draft.frameHeightPx : null,
+    checkEnabled: draft.checkEnabled,
+    checkUrl: draft.checkUrl.trim(),
   };
 }
 
@@ -85,6 +90,8 @@ export function ItemDialog({ open, onOpenChange, page, item }: ItemDialogProps) 
     icon: item?.icon ?? null,
     description: item?.description ?? '',
     frameHeightPx: item?.frameHeightPx ?? null,
+    checkEnabled: item?.checkEnabled ?? true,
+    checkUrl: item?.checkUrl ?? '',
   };
   const form = useAppForm({
     defaultValues,
@@ -169,6 +176,32 @@ export function ItemDialog({ open, onOpenChange, page, item }: ItemDialogProps) 
             }
           </form.Subscribe>
           <IconField form={form} name="icon" label="Icon" />
+          <SwitchField
+            form={form}
+            name="checkEnabled"
+            label="Check status"
+            description="The server checks the address every half minute and shows whether it answers."
+          />
+          <form.Subscribe selector={(state) => state.values.checkEnabled}>
+            {(checkEnabled) =>
+              checkEnabled ? (
+                <InputField
+                  form={form}
+                  name="checkUrl"
+                  label="Check address instead"
+                  type="url"
+                  inputMode="url"
+                  autoCapitalize="none"
+                  spellCheck={false}
+                  placeholder="http://nas.local:8096/health"
+                  description="Optional. A health endpoint, or an address the server can reach when the main one needs a sign-in."
+                  validators={{
+                    onChange: ({ value }) => (value.trim() === '' ? undefined : checkUrl(value, limits?.maxUrlLength)),
+                  }}
+                />
+              ) : null
+            }
+          </form.Subscribe>
           {serverError === undefined ? null : (
             <Alert variant="destructive" title="Not saved" description={serverError} />
           )}
