@@ -1,3 +1,21 @@
+# [2.0.0](https://github.com/cubicecho/personal-homepage/compare/v1.3.0...v2.0.0) (2026-11-06)
+
+
+* feat!: store pages in the database instead of YAML files ([ba272e3](https://github.com/cubicecho/personal-homepage/commit/ba272e32138354ac7aa4bef513fc28f32c7bdc6d))
+
+
+### Features
+
+* **db:** open PGlite or Postgres, with committed migrations ([20c105a](https://github.com/cubicecho/personal-homepage/commit/20c105aa13831feca1d35709328e892449529b3c)), closes [#2](https://github.com/cubicecho/personal-homepage/issues/2)
+
+
+### BREAKING CHANGES
+
+* pages are no longer read from or written to
+DATA_DIR/pages/*.yaml and site.yaml. Existing files are imported once on
+first start and then renamed; editing them has no effect afterwards.
+Search engines are set with setSearchEngines instead of site.yaml.
+
 # [1.3.0](https://github.com/cubicecho/personal-homepage/compare/v1.2.0...v1.3.0) (2026-11-06)
 
 
