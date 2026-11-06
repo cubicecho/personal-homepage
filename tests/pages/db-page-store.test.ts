@@ -4,7 +4,7 @@ import { ErrorCode } from '../../server/core/errors.ts';
 import type { OpenedDatabase } from '../../server/db/client.ts';
 import { items, pages } from '../../server/db/schema.ts';
 import { createDbPageStore } from '../../server/pages/db-page-store.ts';
-import { HOME_SLUG, ItemKind, itemsOf, OpensIn, type PageStore } from '../../server/pages/page.ts';
+import { ColumnSpan, HOME_SLUG, ItemKind, itemsOf, OpensIn, type PageStore } from '../../server/pages/page.ts';
 import { parseWidget } from '../../server/pages/page-input.ts';
 import { HttpMethod, ValueFormat, WeatherUnits, type Widget, WidgetType } from '../../server/pages/widget.ts';
 import { openTestDatabase, resetTestDatabase } from '../db.ts';
@@ -163,6 +163,7 @@ describe('database page store', () => {
       icon: null,
       description: null,
       frameHeightPx: PAGE_LIMIT_DEFAULTS.defaultFrameHeightPx,
+      columnSpan: ColumnSpan.Full,
       check: { enabled: false, url: null },
       widget: null,
       visibleTo: [],
@@ -304,6 +305,22 @@ describe('database page store', () => {
     await expect(
       store.addSection(HOME_SLUG, { title: 'One more', collapsed: false, visibleTo: [] }),
     ).rejects.toMatchObject(badInput);
+  });
+
+  it('keeps the width of an item, and gives rows from before it the default of their kind', async () => {
+    await store.addItem(
+      HOME_SLUG,
+      null,
+      linkFields('Wide', { kind: ItemKind.Frame, opensIn: null, columnSpan: ColumnSpan.Two }),
+    );
+    await store.addItem(HOME_SLUG, null, linkFields('Old', { kind: ItemKind.Frame, opensIn: null }));
+    await database.db.execute(sql`update items set column_span = null where id = 'old'`);
+    const page = await store.find(HOME_SLUG);
+    expect(page === null ? [] : itemsOf(page).map((item) => item.columnSpan)).toEqual([
+      ColumnSpan.Two,
+      ColumnSpan.Full,
+    ]);
+    await expect(database.db.execute(sql`update items set column_span = 'FIVE' where id = 'wide'`)).rejects.toThrow();
   });
 
   it('keeps a stored item kind the schema allows, and nothing else', async () => {

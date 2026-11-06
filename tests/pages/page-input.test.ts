@@ -1,7 +1,7 @@
 import { GraphQLError } from 'graphql';
 import { PAGE_LIMIT_DEFAULTS } from '../../server/core/defaults.ts';
 import { ErrorCode } from '../../server/core/errors.ts';
-import { ItemKind, OpensIn } from '../../server/pages/page.ts';
+import { ColumnSpan, ItemKind, OpensIn } from '../../server/pages/page.ts';
 import { parseItemFields, parseNewPage, parsePagePatch, parseSectionFields } from '../../server/pages/page-input.ts';
 
 /**
@@ -45,6 +45,7 @@ describe('parseItemFields', () => {
       icon: null,
       description: null,
       frameHeightPx: null,
+      columnSpan: ColumnSpan.One,
       check: { enabled: true, url: null },
       widget: null,
       visibleTo: [],
@@ -153,5 +154,21 @@ describe('parseSectionFields', () => {
   it('refuses an over-long title', () => {
     const tooLong = 'x'.repeat(PAGE_LIMIT_DEFAULTS.maxTitleLength + 1);
     expect(codeOf(() => parseSectionFields({ title: tooLong }))).toBe(ErrorCode.BadUserInput);
+  });
+});
+
+describe('parseItemFields column span', () => {
+  it('gives each kind its default width and keeps a link at one column', () => {
+    expect(parseItemFields({ ...link, kind: ItemKind.Frame }).columnSpan).toBe(ColumnSpan.Full);
+    expect(parseItemFields({ ...link, columnSpan: ColumnSpan.Three }).columnSpan).toBe(ColumnSpan.One);
+    expect(parseItemFields({ ...link, kind: ItemKind.Frame, columnSpan: ColumnSpan.Two }).columnSpan).toBe(
+      ColumnSpan.Two,
+    );
+  });
+
+  it('refuses a width that is not one of the spans', () => {
+    expect(codeOf(() => parseItemFields({ ...link, kind: ItemKind.Frame, columnSpan: 'FIVE' }))).toBe(
+      ErrorCode.BadUserInput,
+    );
   });
 });

@@ -1,0 +1,2 @@
+ALTER TABLE "items" ADD COLUMN "column_span" text;--> statement-breakpoint
+ALTER TABLE "items" ADD CONSTRAINT "ck_items_column_span" CHECK ("column_span" is null or "column_span" in ('ONE', 'TWO', 'THREE', 'FOUR', 'FULL'));

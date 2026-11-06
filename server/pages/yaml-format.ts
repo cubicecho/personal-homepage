@@ -6,6 +6,7 @@
 // A page with one open, untitled section lists its items under the page; any other has `sections:`.
 // Words (`kind`, `opensIn`, glyph names) are written in lower case with hyphens and read in any case, keys
 // that hold their default are left out, and `kind: app` from 1.0 reads as a link that opens in the app.
+// `columnSpan` is a number of columns, 1 to 4, or `full`.
 //
 // The database is where pages live now. This module only reads a directory of these files (the import from
 // 1.x, and restoring an export) and writes pages back out as them (the export).
@@ -16,7 +17,16 @@ import { z } from 'zod';
 import { PAGE_LIMIT_DEFAULTS } from '../core/defaults.ts';
 import { errorMessage } from '../core/errors.ts';
 import { diskWord, toDiskWord } from './disk-words.ts';
-import { HOME_SLUG, type Item, ItemKind, OpensIn, type Page, type Section } from './page.ts';
+import {
+  ColumnSpan,
+  DEFAULT_COLUMN_SPAN,
+  HOME_SLUG,
+  type Item,
+  ItemKind,
+  OpensIn,
+  type Page,
+  type Section,
+} from './page.ts';
 import { describeIssues, isIconRef, isWebUrl, normalizeIconRef, SLUG_PATTERN } from './page-input.ts';
 import { slugFrom, uniqueSlug } from './slug.ts';
 import { diskWidgetSchema, widgetFromDisk, widgetToDisk } from './widget-disk.ts';
@@ -60,6 +70,36 @@ const diskGroups = z
   .nullish()
   .transform((groups) => [...new Set((groups ?? []).map((group) => group.trim()).filter((group) => group !== ''))]);
 
+/** The most columns a span can name by number. */
+const MAX_SPAN_COLUMNS = 4;
+
+/** The column spans written as a number of columns; FULL is written as the word. */
+const SPAN_BY_COLUMNS: Readonly<Record<number, ColumnSpan>> = Object.freeze({
+  1: ColumnSpan.One,
+  2: ColumnSpan.Two,
+  3: ColumnSpan.Three,
+  4: ColumnSpan.Four,
+});
+const COLUMNS_BY_SPAN: Readonly<Partial<Record<ColumnSpan, number>>> = Object.freeze({
+  ONE: 1,
+  TWO: 2,
+  THREE: 3,
+  FOUR: 4,
+});
+
+/** A column span as written: 1 to 4, or `full`; the words (`two`, `FULL`) are read too. */
+const diskColumnSpan = z
+  .union([
+    z
+      .number()
+      .int()
+      .min(1)
+      .max(MAX_SPAN_COLUMNS)
+      .transform((columns) => SPAN_BY_COLUMNS[columns] ?? ColumnSpan.Full),
+    diskWord(Object.values(ColumnSpan)),
+  ])
+  .nullish();
+
 const diskItemSchema = z
   .object({
     id: z.string().trim().nullish(),
@@ -70,6 +110,7 @@ const diskItemSchema = z
     icon: diskIcon,
     description: z.string().trim().nullish(),
     frameHeightPx: z.number().int().positive().nullish(),
+    columnSpan: diskColumnSpan,
     check: z
       .union([z.boolean(), z.string().trim().refine(isWebUrl, 'check must be true, false or an http(s) address')])
       .nullish(),
@@ -194,6 +235,7 @@ function itemFromDisk(item: DiskItem, id: string): Item {
     icon: item.icon,
     description: description === '' ? null : description,
     frameHeightPx: isFrame ? frameHeightFrom(item.frameHeightPx) : null,
+    columnSpan: kind === ItemKind.Link ? ColumnSpan.One : (item.columnSpan ?? DEFAULT_COLUMN_SPAN[kind]),
     check: { enabled: check !== false, url: isCheckUrl ? check : null },
     // diskItemSchema has already refused a widget that would come back as a sentence.
     widget: typeof widget === 'string' ? null : widget,
@@ -267,6 +309,9 @@ function itemToDisk(item: Item): Record<string, unknown> {
   }
   if (item.frameHeightPx !== null) {
     written.frameHeightPx = item.frameHeightPx;
+  }
+  if (item.columnSpan !== DEFAULT_COLUMN_SPAN[item.kind]) {
+    written.columnSpan = COLUMNS_BY_SPAN[item.columnSpan] ?? toDiskWord(item.columnSpan);
   }
   const isCheckedByDefault = item.kind !== ItemKind.Widget;
   if (item.check.url !== null && item.check.enabled) {

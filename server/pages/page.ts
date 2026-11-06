@@ -28,6 +28,27 @@ export const OpensIn = {
 export type OpensIn = (typeof OpensIn)[keyof typeof OpensIn];
 
 /**
+ * How many columns of its section's grid an item spans. The web app clamps it to the columns there are
+ * room for, so on a phone everything is one column wide.
+ */
+export const ColumnSpan = {
+  One: 'ONE',
+  Two: 'TWO',
+  Three: 'THREE',
+  Four: 'FOUR',
+  /** Every column, on a row of its own. */
+  Full: 'FULL',
+} as const;
+export type ColumnSpan = (typeof ColumnSpan)[keyof typeof ColumnSpan];
+
+/** The width each kind gets when none is chosen. A link is always one column. */
+export const DEFAULT_COLUMN_SPAN: Readonly<Record<ItemKind, ColumnSpan>> = Object.freeze({
+  LINK: ColumnSpan.One,
+  FRAME: ColumnSpan.Full,
+  WIDGET: ColumnSpan.Two,
+});
+
+/**
  * The glyphs drawn by the web app itself. An icon reference that is one of these names is a glyph;
  * see `IconRef` for the other forms.
  */
@@ -92,6 +113,8 @@ export interface Item {
   description: string | null;
   /** Height of the inline frame, in CSS pixels. Set for FRAME items only, null for the others. */
   frameHeightPx: number | null;
+  /** How many grid columns it spans. Always ONE for a link. */
+  columnSpan: ColumnSpan;
   check: StatusCheck;
   /** What a WIDGET shows. Null for the other kinds. */
   widget: Widget | null;
@@ -163,6 +186,8 @@ export interface ItemFields {
   icon: IconRef | null;
   description: string | null;
   frameHeightPx: number | null;
+  /** ONE for a link; the kind's default when none was sent. */
+  columnSpan: ColumnSpan;
   check: StatusCheck;
   widget: Widget | null;
   /** The groups that may see it. Empty means everyone who may see the homepage. */

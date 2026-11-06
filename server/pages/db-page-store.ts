@@ -9,7 +9,17 @@ import { PAGE_LIMIT_DEFAULTS } from '../core/defaults.ts';
 import { badInput, notFound } from '../core/errors.ts';
 import type { Database } from '../db/client.ts';
 import { discoveredApps, type ItemRow, items, type PageRow, pages, type SectionRow, sections } from '../db/schema.ts';
-import { HOME_SLUG, type Item, ItemKind, itemsOf, OpensIn, type Page, type PageStore } from './page.ts';
+import {
+  ColumnSpan,
+  DEFAULT_COLUMN_SPAN,
+  HOME_SLUG,
+  type Item,
+  ItemKind,
+  itemsOf,
+  OpensIn,
+  type Page,
+  type PageStore,
+} from './page.ts';
 import * as edits from './page-edits.ts';
 import { describeIssues, SLUG_PATTERN } from './page-input.ts';
 import { slugFrom, uniqueSlug } from './slug.ts';
@@ -74,15 +84,20 @@ function widgetFromRow(row: ItemRow): Widget | null {
  * @returns The item.
  */
 function itemFromRow(row: ItemRow): Item {
+  const kind = memberOf(Object.values(ItemKind), row.kind);
+  const isLink = kind === ItemKind.Link;
+  const storedSpan =
+    row.columnSpan === null ? DEFAULT_COLUMN_SPAN[kind] : memberOf(Object.values(ColumnSpan), row.columnSpan);
   return {
     id: row.id,
-    kind: memberOf(Object.values(ItemKind), row.kind),
+    kind,
     title: row.title,
     url: row.url,
     opensIn: row.opensIn === null ? null : memberOf(Object.values(OpensIn), row.opensIn),
     icon: row.icon,
     description: row.description,
     frameHeightPx: row.frameHeightPx,
+    columnSpan: isLink ? ColumnSpan.One : storedSpan,
     check: { enabled: row.checkEnabled, url: row.checkUrl },
     widget: widgetFromRow(row),
     visibleTo: row.visibleTo,
@@ -248,6 +263,7 @@ export async function writePage(tx: Transaction, page: Page): Promise<Page> {
       icon: item.icon,
       description: item.description,
       frameHeightPx: item.frameHeightPx,
+      columnSpan: item.columnSpan,
       checkEnabled: item.check.enabled,
       checkUrl: item.check.url,
       // The YAML mapping, secret references as written: never a resolved value.

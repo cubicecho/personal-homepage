@@ -5,9 +5,9 @@ import { PAGE_LIMIT_DEFAULTS } from '../../server/core/defaults.ts';
 import type { OpenedDatabase } from '../../server/db/client.ts';
 import { importedName, importYamlData, importYamlOnBoot } from '../../server/db/import-yaml.ts';
 import { createDbPageStore } from '../../server/pages/db-page-store.ts';
-import { HOME_SLUG, ItemKind, itemsOf, OpensIn, type PageStore } from '../../server/pages/page.ts';
+import { ColumnSpan, HOME_SLUG, ItemKind, itemsOf, OpensIn, type PageStore } from '../../server/pages/page.ts';
 import { WidgetType } from '../../server/pages/widget.ts';
-import { readYamlData } from '../../server/pages/yaml-format.ts';
+import { pageToDisk, readYamlData } from '../../server/pages/yaml-format.ts';
 import { createSiteSettings } from '../../server/site/site-settings.ts';
 import { openTestDatabase, resetTestDatabase } from '../db.ts';
 import { linkFields, makeDataDir } from '../helpers.ts';
@@ -126,6 +126,36 @@ describe('importing YAML pages', () => {
         collapsed: true,
         items: [{ id: 'nas', opensIn: OpensIn.SameTab, check: { enabled: true, url: 'http://nas.local/health' } }],
       },
+    ]);
+  });
+
+  it('reads column spans as numbers or words, keeps links at one column, and writes back only what differs', async () => {
+    await writeFiles({
+      'pages/home.yaml': [
+        'title: Home',
+        'items:',
+        '  - { id: wide, kind: frame, title: Wide, url: http://a.local, columnSpan: 3 }',
+        '  - { id: default-frame, kind: frame, title: Default, url: http://b.local }',
+        '  - { id: two, kind: frame, title: Two, url: http://c.local, columnSpan: two }',
+        '  - { id: news, kind: widget, title: News, columnSpan: FULL, widget: { type: rss, url: http://d.local/feed } }',
+        '  - { id: link, title: Link, url: http://e.local, columnSpan: 4 }',
+      ].join('\n'),
+    });
+    const [home] = (await readYamlData(dir)).pages;
+    expect(home === undefined ? [] : itemsOf(home).map((item) => item.columnSpan)).toEqual([
+      ColumnSpan.Three,
+      ColumnSpan.Full,
+      ColumnSpan.Two,
+      ColumnSpan.Full,
+      ColumnSpan.One,
+    ]);
+    const written = home === undefined ? {} : pageToDisk(home);
+    expect((written.items as Record<string, unknown>[]).map((item) => item.columnSpan)).toEqual([
+      3,
+      undefined,
+      2,
+      'full',
+      undefined,
     ]);
   });
 
