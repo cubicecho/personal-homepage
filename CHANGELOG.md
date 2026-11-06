@@ -1,3 +1,11 @@
+# [3.3.0](https://github.com/cubicecho/personal-homepage/compare/v3.2.0...v3.3.0) (2026-11-06)
+
+
+### Features
+
+* let the site set its column count, and size items in those columns ([696609c](https://github.com/cubicecho/personal-homepage/commit/696609c3fae88d37e195ee61b23e45876e07bf35))
+* **web:** lay sections out in the site's columns, and tidy the cards ([9a179c1](https://github.com/cubicecho/personal-homepage/commit/9a179c1ba7aa247259a19ec65c27f78bb467cd4e))
+
 # [3.2.0](https://github.com/cubicecho/personal-homepage/compare/v3.1.1...v3.2.0) (2026-11-06)
 
 
