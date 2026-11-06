@@ -1,3 +1,17 @@
+# [2.2.0](https://github.com/cubicecho/personal-homepage/compare/v2.1.0...v2.2.0) (2026-11-06)
+
+
+### Bug Fixes
+
+* **discovery:** describe an mDNS app at the address it announced ([e7010c9](https://github.com/cubicecho/personal-homepage/commit/e7010c9ae30198d3d27da6cd40f133c1eb39f606))
+
+
+### Features
+
+* **db:** keep discovered apps, and link an item to the one it came from ([b230c9f](https://github.com/cubicecho/personal-homepage/commit/b230c9f3769081488820edefcd76e282fec69822))
+* find apps on the network through mDNS, Dockhand and the Docker socket ([403f98b](https://github.com/cubicecho/personal-homepage/commit/403f98bd412e084035f43fdbfe88e51069032bd2))
+* **web:** list discovered apps in Settings and add them from the item dialog ([465c9aa](https://github.com/cubicecho/personal-homepage/commit/465c9aaca9bf0e24737d997dee8fd1c01fbf1820))
+
 # [2.1.0](https://github.com/cubicecho/personal-homepage/compare/v2.0.0...v2.1.0) (2026-11-06)
 
 
