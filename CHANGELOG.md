@@ -1,3 +1,10 @@
+# [1.2.0](https://github.com/cubicecho/personal-homepage/compare/v1.1.0...v1.2.0) (2026-11-06)
+
+
+### Features
+
+* **web:** give a framed app the whole view under a slim bar ([e2ffa4b](https://github.com/cubicecho/personal-homepage/commit/e2ffa4b19e025505b3b5dec92852f9a360e24bdb))
+
 # [1.1.0](https://github.com/cubicecho/personal-homepage/compare/v1.0.0...v1.1.0) (2026-11-06)
 
 
