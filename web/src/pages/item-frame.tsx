@@ -19,7 +19,7 @@ export function ItemFrame({ item, menuSlot }: ItemFrameProps) {
   return (
     <CardLayout
       title={item.title}
-      iconSlot={iconElement(item.icon, PanelsTopLeft)}
+      iconSlot={iconElement(item.icon, PanelsTopLeft, item.iconUrl)}
       description={item.description ?? undefined}
       actionSlot={
         <>

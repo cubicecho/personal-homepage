@@ -18,7 +18,7 @@ describe('app', () => {
     const data = await makeDataDir();
     remove = data.remove;
     const pages = await createYamlPageStore({ dataDir: data.dir });
-    server = createApp({ pages }).listen(0);
+    server = createApp({ pages, dataDir: data.dir }).listen(0);
     await new Promise<void>((resolve) => server.once('listening', resolve));
     base = `http://127.0.0.1:${portOf(server)}`;
   });
@@ -47,14 +47,14 @@ describe('app', () => {
   it('serves the home page and the limits', async () => {
     const { data } = await post('{ pages { slug title isHome icon items { id } } pageLimits { maxPages } }');
     expect(data).toEqual({
-      pages: [{ slug: 'home', title: 'Home', isHome: true, icon: 'HOUSE', items: [] }],
+      pages: [{ slug: 'home', title: 'Home', isHome: true, icon: 'house', items: [] }],
       pageLimits: { maxPages: PAGE_LIMIT_DEFAULTS.maxPages },
     });
   });
 
   it('creates a page and adds an item to it', async () => {
     const created = await post('mutation ($input: CreatePageInput!) { createPage(input: $input) { slug isHome } }', {
-      input: { title: 'Media', icon: 'FILM' },
+      input: { title: 'Media', icon: 'film' },
     });
     expect(created.data.createPage).toEqual({ slug: 'media', isHome: false });
 
@@ -68,6 +68,22 @@ describe('app', () => {
 
     const { data } = await post('{ page(slug: "media") { title items { title url } } }');
     expect(data.page).toEqual({ title: 'Media', items: [{ title: 'Grafana', url: 'http://nas.local:3001' }] });
+  });
+
+  it('adds a section and moves an item into it', async () => {
+    await post('mutation { addSection(pageSlug: "media", input: { title: "Watch" }) { slug } }');
+    const { data } = await post(
+      'mutation { moveItem(pageSlug: "media", id: "grafana", toSectionId: "watch", toIndex: 0) { sections { id title items { id checkEnabled } } } }',
+    );
+    expect(data.moveItem.sections).toEqual([
+      { id: 'main', title: null, items: [] },
+      { id: 'watch', title: 'Watch', items: [{ id: 'grafana', checkEnabled: true }] },
+    ]);
+  });
+
+  it('serves the default search engines', async () => {
+    const { data } = await post('{ searchEngines { prefix isDefault } }');
+    expect(data.searchEngines.filter((engine: { isDefault: boolean }) => engine.isDefault)).toHaveLength(1);
   });
 
   it('refuses a script URL with BAD_USER_INPUT', async () => {

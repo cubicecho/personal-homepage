@@ -26,7 +26,12 @@ export default defineConfig({
   server: {
     ...WEB_SERVER,
     // The API runs beside Vite in dev; the regex keeps /graphql-ish asset paths out of the proxy.
-    proxy: { '^/graphql(\\?|$)': API_ORIGIN, '/healthz': API_ORIGIN },
+    proxy: {
+      '^/graphql(\\?|$)': API_ORIGIN,
+      '/healthz': API_ORIGIN,
+      '/export.zip': API_ORIGIN,
+      '/icons/': API_ORIGIN,
+    },
   },
   preview: WEB_SERVER,
 });

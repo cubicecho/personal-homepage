@@ -106,7 +106,7 @@ export function PageView({ slug }: PageViewProps) {
     <>
       <PageLayout
         title={page.title}
-        iconSlot={iconElement(page.icon, LayoutGrid)}
+        iconSlot={iconElement(page.icon, LayoutGrid, page.iconUrl)}
         actionSlot={
           <>
             <Button size="sm" variant="info" iconSlot={<Plus />} content="Add item" onClick={() => openItemDialog()} />

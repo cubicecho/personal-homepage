@@ -81,7 +81,7 @@ export function AppView({ slug, itemId }: AppViewProps) {
       width="full"
       scroll={false}
       title={item.title}
-      iconSlot={iconElement(item.icon, AppWindow)}
+      iconSlot={iconElement(item.icon, AppWindow, item.iconUrl)}
       breadcrumbsSlot={<BackLink page={page} />}
       description="If the frame stays blank, the site refuses to be shown inside another page. Open it in the browser instead."
       actionSlot={

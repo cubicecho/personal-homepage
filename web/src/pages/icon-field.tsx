@@ -1,4 +1,3 @@
-import type { Icon } from '@/__generated__/graphql';
 import { bindToForm, type FieldProps, useFieldContext, useFieldError } from '@/components/app-form';
 import { FormField } from '@/components/form-field';
 import { ToggleChip } from '@/components/ui/toggle-chip';
@@ -9,7 +8,7 @@ const NO_ICON_LABEL = 'No icon';
 
 /** Picks one of the page icons, or none, from a grid of glyphs. */
 function BoundIconField(props: FieldProps) {
-  const field = useFieldContext<Icon | null>();
+  const field = useFieldContext<string | null>();
   const value = field.state.value;
 
   /**
@@ -17,7 +16,7 @@ function BoundIconField(props: FieldProps) {
    *
    * @param next - The icon chosen, or null for none.
    */
-  const choose = (next: Icon | null): void => {
+  const choose = (next: string | null): void => {
     field.handleChange(next);
     field.handleBlur();
   };
@@ -59,5 +58,5 @@ function BoundIconField(props: FieldProps) {
   );
 }
 
-/** The icon picker, bound to a form field holding an `Icon` or null. */
-export const IconField = bindToForm<FieldProps, Icon | null>(BoundIconField, 'IconField');
+/** The icon picker, bound to a form field holding an icon reference or null. */
+export const IconField = bindToForm<FieldProps, string | null>(BoundIconField, 'IconField');

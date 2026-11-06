@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { Icon, ItemInput, ItemKind } from '@/__generated__/graphql';
+import type { ItemInput, ItemKind, OpensIn } from '@/__generated__/graphql';
 import { InputField, NumberField, TextareaField, useAppForm } from '@/components/app-form';
 import { DialogLayout } from '@/components/dialog-layout';
 import { RadioGroupField, type RadioOption } from '@/components/radio-group-field';
@@ -9,7 +9,7 @@ import { FormElement } from '@/components/ui/form-element';
 import { messageOf } from '@/lib/error-message';
 import { checkFrameHeight, checkLength, checkTitle, checkUrl } from './form-checks';
 import { IconField } from './icon-field';
-import { ITEM_KINDS } from './item-kinds';
+import { ITEM_KINDS, OPENS_IN } from './item-kinds';
 import { type Item, type Page, useAddItem, usePageLimits, useUpdateItem } from './use-pages';
 
 interface ItemDialogProps {
@@ -24,9 +24,10 @@ interface ItemDialogProps {
 /** What the form holds. */
 interface ItemDraft {
   kind: ItemKind;
+  opensIn: OpensIn;
   title: string;
   url: string;
-  icon: Icon | null;
+  icon: string | null;
   description: string;
   frameHeightPx: number | null;
 }
@@ -37,6 +38,15 @@ const KIND_OPTIONS: readonly RadioOption[] = Object.entries(ITEM_KINDS).map(([ki
   description: summary,
   iconSlot: <Glyph />,
 }));
+
+const OPENS_IN_OPTIONS: readonly RadioOption[] = Object.entries(OPENS_IN).map(
+  ([opensIn, { Glyph, label, summary }]) => ({
+    value: opensIn,
+    label,
+    description: summary,
+    iconSlot: <Glyph />,
+  }),
+);
 
 /**
  * Turns the form's values into the API's input.
@@ -49,6 +59,7 @@ function toInput(draft: ItemDraft): ItemInput {
   const isFrame = draft.kind === 'FRAME';
   return {
     kind: draft.kind,
+    opensIn: isFrame ? null : draft.opensIn,
     title: draft.title.trim(),
     url: draft.url.trim(),
     icon: draft.icon,
@@ -68,6 +79,7 @@ export function ItemDialog({ open, onOpenChange, page, item }: ItemDialogProps) 
 
   const defaultValues: ItemDraft = {
     kind: item?.kind ?? 'LINK',
+    opensIn: item?.opensIn ?? 'NEW_TAB',
     title: item?.title ?? '',
     url: item?.url ?? '',
     icon: item?.icon ?? null,
@@ -132,6 +144,13 @@ export function ItemDialog({ open, onOpenChange, page, item }: ItemDialogProps) 
             placeholder="Films and shows"
             validators={{ onChange: ({ value }) => checkLength(value, limits?.maxDescriptionLength) }}
           />
+          <form.Subscribe selector={(state) => state.values.kind}>
+            {(kind) =>
+              kind === 'LINK' ? (
+                <RadioGroupField form={form} name="opensIn" label="Opens" variant="card" options={OPENS_IN_OPTIONS} />
+              ) : null
+            }
+          </form.Subscribe>
           <form.Subscribe selector={(state) => state.values.kind}>
             {(kind) =>
               kind === 'FRAME' ? (

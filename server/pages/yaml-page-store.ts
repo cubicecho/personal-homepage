@@ -3,31 +3,44 @@
 //   <dataDir>/site.yaml          pageOrder: [media, tools]    the order of every page but home
 //   <dataDir>/pages/<slug>.yaml  one page; the file name is its slug
 //
-// A page file:
+// A page file with one untitled section lists its items straight under the page:
 //
 //   title: Media
 //   icon: film
 //   items:
 //     - id: jellyfin
-//       kind: link
+//       kind: link              # link (the default) or frame
+//       opensIn: new-tab        # new-tab (the default), same-tab or app; links only
 //       title: Jellyfin
 //       url: http://nas.local:8096
-//       icon: film
+//       icon: di:jellyfin       # a glyph name, di:<name>, sh:<name>, favicon, or an image URL
 //       description: Films and shows
+//       check: http://nas.local:8096/health   # false to not check; a URL to check instead; left out checks url
 //     - id: grafana
 //       kind: frame
 //       title: Grafana
 //       url: http://nas.local:3001/d/home
 //       frameHeightPx: 480
 //
-// `kind` and `icon` are written in lower case (`link`, `film`) and read in any case, so `LINK` works
-// too. When writing, keys that are null are left out. An item written by hand without an `id`, or
-// with one that is not a slug, gets one made from its title when read; it is saved on the next write.
+// With more sections, or a titled one, the items sit under `sections`:
+//
+//   title: Media
+//   sections:
+//     - id: watch
+//       title: Watch
+//       collapsed: true         # starts folded; left out means open
+//       items: [...]
+//
+// Older files are read too: `kind: app` is a link that opens in the app. Words (`kind`, `opensIn`, glyph
+// names) are written in lower case with hyphens and read in any case. When writing, keys that hold their
+// default are left out. An item or section without a usable `id` gets one made from its title when read;
+// it is saved on the next write. An icon that is not a reference this app knows is read as no icon.
 //
 // Files are read on every call, so a hand edit shows up on the next request without a restart.
 // Writes go through one queue, so two mutations never interleave, and each file is written to a
 // temporary file beside it and renamed over it, so a reader never sees half a file. A write rewrites
-// the whole file, which drops any comments written in it by hand.
+// the whole file, which drops any comments written in it by hand. Keys of site.yaml other than
+// pageOrder are kept.
 //
 // A file that does not parse, or does not match the shape above, is logged once (`[store]`) and left
 // out of the list. Asking for it by slug, or changing it, is NOT_FOUND with a message naming the file
@@ -40,11 +53,12 @@ import { parse, stringify } from 'yaml';
 import { z } from 'zod';
 import { PAGE_LIMIT_DEFAULTS } from '../core/defaults.ts';
 import { badInput, errorMessage, notFound } from '../core/errors.ts';
-import { HOME_SLUG, Icon, type Item, ItemKind, type Page, type PageStore } from './page.ts';
-import { describeIssues, isWebUrl, SLUG_PATTERN } from './page-input.ts';
+import { HOME_SLUG, type Item, ItemKind, itemsOf, OpensIn, type Page, type PageStore, type Section } from './page.ts';
+import { describeIssues, isIconRef, isWebUrl, normalizeIconRef, SLUG_PATTERN } from './page-input.ts';
 import { slugFrom, uniqueSlug } from './slug.ts';
 
-const { maxPages, maxItemsPerPage, minFrameHeightPx, maxFrameHeightPx, defaultFrameHeightPx } = PAGE_LIMIT_DEFAULTS;
+const { maxPages, maxItemsPerPage, maxSectionsPerPage, minFrameHeightPx, maxFrameHeightPx, defaultFrameHeightPx } =
+  PAGE_LIMIT_DEFAULTS;
 
 const SITE_FILE = 'site.yaml';
 const PAGES_DIR = 'pages';
@@ -54,8 +68,14 @@ const TEMP_EXTENSION = '.tmp';
 const FALLBACK_PAGE_SLUG = 'page';
 /** What an item made from a title of only symbols is called. */
 const FALLBACK_ITEM_ID = 'item';
-/** The page every data directory starts with. */
-const HOME_PAGE: Readonly<Page> = Object.freeze({ slug: HOME_SLUG, title: 'Home', icon: Icon.House, items: [] });
+/** The id of a page's untitled first section, and of a section with no title. */
+const MAIN_SECTION_ID = 'main';
+/** What a titled section made from a title of only symbols is called. */
+const FALLBACK_SECTION_ID = 'section';
+/** The kind older files used for a link that opens in the app. */
+const LEGACY_APP_KIND = 'APP';
+/** The icon of the page every data directory starts with. */
+const HOME_ICON = 'house';
 /** Keeps long URLs on one line instead of folding them. */
 const YAML_WRITE_OPTIONS = { lineWidth: 0 } as const;
 const MISSING_FILE = 'ENOENT';
@@ -93,29 +113,52 @@ function toDiskWord(value: string): string {
   return value.toLowerCase().replaceAll('_', '-');
 }
 
-const ITEM_KINDS = Object.values(ItemKind);
-const ICONS = Object.values(Icon);
+const ITEM_KINDS = [...Object.values(ItemKind), LEGACY_APP_KIND];
+const OPENS_IN = Object.values(OpensIn);
+
+/** An icon as written: any known reference, or nothing. An unknown one reads as no icon. */
+const diskIcon = z
+  .string()
+  .nullish()
+  .transform((value) => {
+    const icon = normalizeIconRef(value ?? '');
+    return isIconRef(icon, true) ? icon : null;
+  });
 
 const diskItemSchema = z.object({
   id: z.string().trim().nullish(),
-  kind: diskWord(ITEM_KINDS),
+  kind: diskWord(ITEM_KINDS).nullish(),
+  opensIn: diskWord(OPENS_IN).nullish(),
   title: z.string().trim().min(1, 'needs a title'),
   url: z.string().trim().refine(isWebUrl, 'must be an http:// or https:// address'),
-  icon: diskWord(ICONS).nullish(),
+  icon: diskIcon,
   description: z.string().trim().nullish(),
   frameHeightPx: z.number().int().positive().nullish(),
+  check: z
+    .union([z.boolean(), z.string().trim().refine(isWebUrl, 'check must be true, false or an http(s) address')])
+    .nullish(),
 });
 type DiskItem = z.output<typeof diskItemSchema>;
 
-const diskPageSchema = z.object({
-  title: z.string().trim().min(1, 'needs a title'),
-  icon: diskWord(ICONS).nullish(),
+const diskSectionSchema = z.object({
+  id: z.string().trim().nullish(),
+  title: z.string().trim().nullish(),
+  collapsed: z.boolean().nullish(),
   items: z.array(diskItemSchema).nullish(),
 });
+type DiskSection = z.output<typeof diskSectionSchema>;
 
-const siteSchema = z.object({
+const diskPageSchema = z.object({
+  title: z.string().trim().min(1, 'needs a title'),
+  icon: diskIcon,
+  items: z.array(diskItemSchema).nullish(),
+  sections: z.array(diskSectionSchema).nullish(),
+});
+
+const siteSchema = z.looseObject({
   pageOrder: z.array(z.string()).nullish(),
 });
+type Site = z.output<typeof siteSchema>;
 
 /** What reading one page file found. */
 type PageRead = { page: Page; problem: null } | { page: null; problem: string } | { page: null; problem: null };
@@ -132,62 +175,137 @@ function frameHeightFrom(heightPx: number | null | undefined): number {
 }
 
 /**
- * Turns the items read from a file into the model, giving each a unique id.
+ * Gives an id that is a slug and not yet taken, keeping the written one when it is usable.
  *
- * @param items - The items as read.
- * @returns The items.
+ * @param written - The id in the file, if any.
+ * @param title - The title to make one from otherwise.
+ * @param fallback - The id for a title of only symbols.
+ * @param taken - The ids already used; the result is added to it.
+ * @returns The id.
  */
-function itemsFromDisk(items: DiskItem[]): Item[] {
-  const ids = new Set<string>();
-  return items.map((item) => {
-    const written = item.id ?? '';
-    const isUsableId = SLUG_PATTERN.test(written) && ids.has(written) === false;
-    const id = isUsableId ? written : uniqueSlug(slugFrom(item.title, FALLBACK_ITEM_ID), ids);
-    ids.add(id);
-    const description = item.description ?? '';
-    const isFrame = item.kind === ItemKind.Frame;
-    return {
-      id,
-      kind: item.kind,
-      title: item.title,
-      url: item.url,
-      icon: item.icon ?? null,
-      description: description === '' ? null : description,
-      frameHeightPx: isFrame ? frameHeightFrom(item.frameHeightPx) : null,
-    };
-  });
+function claimId(written: string | null | undefined, title: string, fallback: string, taken: Set<string>): string {
+  const wanted = written ?? '';
+  const isUsable = SLUG_PATTERN.test(wanted) && taken.has(wanted) === false;
+  const id = isUsable ? wanted : uniqueSlug(slugFrom(title, fallback), taken);
+  taken.add(id);
+  return id;
 }
 
 /**
- * Builds what a page file holds, leaving out keys that are null.
+ * Turns one item read from a file into the model.
+ *
+ * @param item - The item as read.
+ * @param id - Its id, already made unique.
+ * @returns The item.
+ */
+function itemFromDisk(item: DiskItem, id: string): Item {
+  const isLegacyApp = item.kind === LEGACY_APP_KIND;
+  const kind = item.kind === ItemKind.Frame ? ItemKind.Frame : ItemKind.Link;
+  const isFrame = kind === ItemKind.Frame;
+  const writtenOpensIn = item.opensIn ?? OpensIn.NewTab;
+  const opensIn = isLegacyApp ? OpensIn.App : writtenOpensIn;
+  const description = item.description ?? '';
+  const check = item.check ?? true;
+  const isCheckUrl = typeof check === 'string';
+  return {
+    id,
+    kind,
+    title: item.title,
+    url: item.url,
+    opensIn: isFrame ? null : opensIn,
+    icon: item.icon,
+    description: description === '' ? null : description,
+    frameHeightPx: isFrame ? frameHeightFrom(item.frameHeightPx) : null,
+    check: { enabled: check !== false, url: isCheckUrl ? check : null },
+  };
+}
+
+/**
+ * Turns the sections read from a file into the model, giving every section and item a unique id.
+ *
+ * @param sections - The sections as read. A page written with bare `items` is one untitled section.
+ * @returns The sections; at least one.
+ */
+function sectionsFromDisk(sections: DiskSection[]): Section[] {
+  const sectionIds = new Set<string>();
+  const itemIds = new Set<string>();
+  const read = sections.map((section) => {
+    const title = section.title ?? '';
+    const hasTitle = title !== '';
+    const id = claimId(section.id, hasTitle ? title : MAIN_SECTION_ID, FALLBACK_SECTION_ID, sectionIds);
+    const items = (section.items ?? []).map((item) =>
+      itemFromDisk(item, claimId(item.id, item.title, FALLBACK_ITEM_ID, itemIds)),
+    );
+    return { id, title: hasTitle ? title : null, collapsed: section.collapsed ?? false, items };
+  });
+  const isEmpty = read.length === 0;
+  return isEmpty ? [{ id: MAIN_SECTION_ID, title: null, collapsed: false, items: [] }] : read;
+}
+
+/**
+ * Builds what one item holds on disk, leaving out keys that hold their default.
+ *
+ * @param item - The item.
+ * @returns The plain object to write as YAML.
+ */
+function itemToDisk(item: Item): Record<string, unknown> {
+  const written: Record<string, unknown> = { id: item.id };
+  if (item.kind !== ItemKind.Link) {
+    written.kind = toDiskWord(item.kind);
+  }
+  const hasOpensIn = item.opensIn !== null && item.opensIn !== OpensIn.NewTab;
+  if (hasOpensIn && item.opensIn !== null) {
+    written.opensIn = toDiskWord(item.opensIn);
+  }
+  written.title = item.title;
+  written.url = item.url;
+  if (item.icon !== null) {
+    written.icon = item.icon;
+  }
+  if (item.description !== null) {
+    written.description = item.description;
+  }
+  if (item.frameHeightPx !== null) {
+    written.frameHeightPx = item.frameHeightPx;
+  }
+  if (item.check.enabled === false) {
+    written.check = false;
+  } else if (item.check.url !== null) {
+    written.check = item.check.url;
+  }
+  return written;
+}
+
+/**
+ * Builds what a page file holds. A page that is one open, untitled section lists its items under the
+ * page; any other is written as sections.
  *
  * @param page - The page.
  * @returns The plain object to write as YAML.
  */
 function pageToDisk(page: Page): Record<string, unknown> {
-  const items = page.items.map((item) => {
-    const written: Record<string, unknown> = {
-      id: item.id,
-      kind: toDiskWord(item.kind),
-      title: item.title,
-      url: item.url,
-    };
-    if (item.icon !== null) {
-      written.icon = toDiskWord(item.icon);
-    }
-    if (item.description !== null) {
-      written.description = item.description;
-    }
-    if (item.frameHeightPx !== null) {
-      written.frameHeightPx = item.frameHeightPx;
-    }
-    return written;
-  });
   const written: Record<string, unknown> = { title: page.title };
   if (page.icon !== null) {
-    written.icon = toDiskWord(page.icon);
+    written.icon = page.icon;
   }
-  written.items = items;
+  const [first] = page.sections;
+  const isPlain =
+    page.sections.length === 1 && first !== undefined && first.title === null && first.collapsed === false;
+  if (isPlain) {
+    written.items = first.items.map(itemToDisk);
+    return written;
+  }
+  written.sections = page.sections.map((section) => {
+    const disk: Record<string, unknown> = { id: section.id };
+    if (section.title !== null) {
+      disk.title = section.title;
+    }
+    if (section.collapsed) {
+      disk.collapsed = true;
+    }
+    disk.items = section.items.map(itemToDisk);
+    return disk;
+  });
   return written;
 }
 
@@ -356,8 +474,9 @@ export async function createYamlPageStore(settings: YamlPageStoreSettings): Prom
       return { page: null, problem };
     }
     report(file, null);
-    const { title, icon, items } = result.data;
-    return { page: { slug, title, icon: icon ?? null, items: itemsFromDisk(items ?? []) }, problem: null };
+    const { title, icon, items, sections } = result.data;
+    const diskSections = sections ?? [{ items: items ?? [] }];
+    return { page: { slug, title, icon, sections: sectionsFromDisk(diskSections) }, problem: null };
   };
 
   /**
@@ -374,41 +493,44 @@ export async function createYamlPageStore(settings: YamlPageStoreSettings): Prom
   };
 
   /**
-   * Reads the page order from `site.yaml`.
+   * Reads `site.yaml`.
    *
-   * @returns The slugs in order; empty when the file is missing or unreadable.
+   * @returns What it holds; empty when the file is missing or unreadable.
    */
-  const readOrder = async (): Promise<string[]> => {
+  const readSite = async (): Promise<Site> => {
     let text: string;
     try {
       text = await readFile(siteFile, 'utf-8');
     } catch (error) {
       if (isMissingFile(error)) {
-        return [];
+        return {};
       }
       throw error;
     }
     try {
-      const result = siteSchema.safeParse(parse(text));
+      const result = siteSchema.safeParse(parse(text) ?? {});
       if (result.success === false) {
         report(siteFile, describeIssues(result.error));
-        return [];
+        return {};
       }
       report(siteFile, null);
-      return result.data.pageOrder ?? [];
+      return result.data;
     } catch (error) {
       report(siteFile, yamlProblem(error));
-      return [];
+      return {};
     }
   };
 
   /**
-   * Writes the order of every page but home.
+   * Writes the order of every page but home, keeping the rest of `site.yaml`.
    *
    * @param pages - The pages, in list order.
    */
-  const writeOrder = (pages: readonly Page[]): Promise<void> =>
-    writeYaml(siteFile, { pageOrder: pages.map((page) => page.slug).filter((slug) => slug !== HOME_SLUG) });
+  const writeOrder = async (pages: readonly Page[]): Promise<void> => {
+    const site = await readSite();
+    const pageOrder = pages.map((page) => page.slug).filter((slug) => slug !== HOME_SLUG);
+    await writeYaml(siteFile, { ...site, pageOrder });
+  };
 
   /**
    * Reads every readable page, in list order.
@@ -416,10 +538,10 @@ export async function createYamlPageStore(settings: YamlPageStoreSettings): Prom
    * @returns The pages.
    */
   const readAll = async (): Promise<Page[]> => {
-    const [slugs, order] = await Promise.all([listSlugs(), readOrder()]);
+    const [slugs, site] = await Promise.all([listSlugs(), readSite()]);
     const reads = await Promise.all(slugs.map(readPage));
     const pages = reads.flatMap((read) => (read.page === null ? [] : [read.page]));
-    return orderPages(pages, order);
+    return orderPages(pages, site.pageOrder ?? []);
   };
 
   /**
@@ -447,16 +569,47 @@ export async function createYamlPageStore(settings: YamlPageStoreSettings): Prom
    *
    * @param page - The page.
    * @param id - The item's id.
-   * @returns The item's index.
+   * @returns The index of its section, and its index there.
    * @throws NOT_FOUND when the page has no such item.
    */
-  const indexOfItem = (page: Page, id: string): number => {
-    const index = page.items.findIndex((item) => item.id === id);
+  const locateItem = (page: Page, id: string): { sectionIndex: number; itemIndex: number } => {
+    for (const [sectionIndex, section] of page.sections.entries()) {
+      const itemIndex = section.items.findIndex((item) => item.id === id);
+      if (itemIndex !== -1) {
+        return { sectionIndex, itemIndex };
+      }
+    }
+    throw notFound(`The page "${page.slug}" has no item "${id}".`);
+  };
+
+  /**
+   * Finds a section's place on its page.
+   *
+   * @param page - The page.
+   * @param id - The section's id.
+   * @returns Its index.
+   * @throws NOT_FOUND when the page has no such section.
+   */
+  const locateSection = (page: Page, id: string): number => {
+    const index = page.sections.findIndex((section) => section.id === id);
     if (index === -1) {
-      throw notFound(`The page "${page.slug}" has no item "${id}".`);
+      throw notFound(`The page "${page.slug}" has no section "${id}".`);
     }
     return index;
   };
+
+  /**
+   * Replaces one section of a page.
+   *
+   * @param page - The page.
+   * @param index - The section's index.
+   * @param change - Builds the new section from the old.
+   * @returns A new page.
+   */
+  const withSection = (page: Page, index: number, change: (section: Section) => Section): Page => ({
+    ...page,
+    sections: page.sections.map((section, at) => (at === index ? change(section) : section)),
+  });
 
   /**
    * Writes a page and returns it.
@@ -485,7 +638,7 @@ export async function createYamlPageStore(settings: YamlPageStoreSettings): Prom
   await mkdir(pagesDir, { recursive: true });
   const hasHome = existsSync(pageFile(HOME_SLUG));
   if (hasHome === false) {
-    await savePage({ ...HOME_PAGE, items: [] });
+    await savePage({ slug: HOME_SLUG, title: 'Home', icon: HOME_ICON, sections: sectionsFromDisk([]) });
   }
 
   return {
@@ -517,7 +670,7 @@ export async function createYamlPageStore(settings: YamlPageStoreSettings): Prom
           );
         }
         const slug = wanted ?? uniqueSlug(slugFrom(newPage.title, FALLBACK_PAGE_SLUG), taken);
-        const page: Page = { slug, title: newPage.title, icon: newPage.icon, items: [] };
+        const page: Page = { slug, title: newPage.title, icon: newPage.icon, sections: sectionsFromDisk([]) };
         const pages = await readAll();
         await savePage(page);
         await writeOrder([...pages, page]);
@@ -555,38 +708,110 @@ export async function createYamlPageStore(settings: YamlPageStoreSettings): Prom
         return moved;
       }),
 
-    addItem: (slug, fields) =>
+    addSection: (slug, fields) =>
       exclusive(async () => {
         const page = await loadPage(slug);
-        if (page.items.length >= maxItemsPerPage) {
+        if (page.sections.length >= maxSectionsPerPage) {
+          throw badInput(`"${page.title}" already has ${maxSectionsPerPage} sections, the most a page can hold.`);
+        }
+        const ids = new Set(page.sections.map((section) => section.id));
+        const id = uniqueSlug(slugFrom(fields.title ?? '', FALLBACK_SECTION_ID), ids);
+        return savePage({ ...page, sections: [...page.sections, { id, ...fields, items: [] }] });
+      }),
+
+    updateSection: (slug, id, fields) =>
+      exclusive(async () => {
+        const page = await loadPage(slug);
+        const index = locateSection(page, id);
+        return savePage(withSection(page, index, (section) => ({ ...section, ...fields })));
+      }),
+
+    removeSection: (slug, id) =>
+      exclusive(async () => {
+        const page = await loadPage(slug);
+        const index = locateSection(page, id);
+        if (page.sections.length === 1) {
+          throw badInput("A page's last section can't be removed. Remove its items instead.");
+        }
+        return savePage({ ...page, sections: page.sections.filter((_section, at) => at !== index) });
+      }),
+
+    moveSection: (slug, id, toIndex) =>
+      exclusive(async () => {
+        const page = await loadPage(slug);
+        const from = locateSection(page, id);
+        const to = clampIndex(toIndex, 0, page.sections.length - 1);
+        return savePage({ ...page, sections: moveEntry(page.sections, from, to) });
+      }),
+
+    addItem: (slug, sectionId, fields) =>
+      exclusive(async () => {
+        const page = await loadPage(slug);
+        const items = itemsOf(page);
+        if (items.length >= maxItemsPerPage) {
           throw badInput(`"${page.title}" already has ${maxItemsPerPage} items, the most a page can hold.`);
         }
-        const ids = new Set(page.items.map((item) => item.id));
+        const index = sectionId === null ? 0 : locateSection(page, sectionId);
+        const ids = new Set(items.map((item) => item.id));
         const id = uniqueSlug(slugFrom(fields.title, FALLBACK_ITEM_ID), ids);
-        return savePage({ ...page, items: [...page.items, { id, ...fields }] });
+        return savePage(
+          withSection(page, index, (section) => ({ ...section, items: [...section.items, { id, ...fields }] })),
+        );
       }),
 
     updateItem: (slug, id, fields) =>
       exclusive(async () => {
         const page = await loadPage(slug);
-        const index = indexOfItem(page, id);
-        const items = page.items.map((item, at) => (at === index ? { id, ...fields } : item));
-        return savePage({ ...page, items });
+        const { sectionIndex, itemIndex } = locateItem(page, id);
+        return savePage(
+          withSection(page, sectionIndex, (section) => ({
+            ...section,
+            items: section.items.map((item, at) => (at === itemIndex ? { id, ...fields } : item)),
+          })),
+        );
       }),
 
     removeItem: (slug, id) =>
       exclusive(async () => {
         const page = await loadPage(slug);
-        const index = indexOfItem(page, id);
-        return savePage({ ...page, items: page.items.filter((_item, at) => at !== index) });
+        const { sectionIndex, itemIndex } = locateItem(page, id);
+        return savePage(
+          withSection(page, sectionIndex, (section) => ({
+            ...section,
+            items: section.items.filter((_item, at) => at !== itemIndex),
+          })),
+        );
       }),
 
-    moveItem: (slug, id, toIndex) =>
+    moveItem: (slug, id, toSectionId, toIndex) =>
       exclusive(async () => {
         const page = await loadPage(slug);
-        const from = indexOfItem(page, id);
-        const to = clampIndex(toIndex, 0, page.items.length - 1);
-        return savePage({ ...page, items: moveEntry(page.items, from, to) });
+        const { sectionIndex, itemIndex } = locateItem(page, id);
+        const targetIndex = toSectionId === null ? sectionIndex : locateSection(page, toSectionId);
+        if (targetIndex === sectionIndex) {
+          return savePage(
+            withSection(page, sectionIndex, (section) => {
+              const to = clampIndex(toIndex, 0, section.items.length - 1);
+              return { ...section, items: moveEntry(section.items, itemIndex, to) };
+            }),
+          );
+        }
+        const moving = page.sections[sectionIndex]?.items[itemIndex];
+        if (moving === undefined) {
+          throw notFound(`The page "${page.slug}" has no item "${id}".`);
+        }
+        const without = withSection(page, sectionIndex, (section) => ({
+          ...section,
+          items: section.items.filter((_item, at) => at !== itemIndex),
+        }));
+        return savePage(
+          withSection(without, targetIndex, (section) => {
+            const to = clampIndex(toIndex, 0, section.items.length);
+            const items = [...section.items];
+            items.splice(to, 0, moving);
+            return { ...section, items };
+          }),
+        );
       }),
   };
 }

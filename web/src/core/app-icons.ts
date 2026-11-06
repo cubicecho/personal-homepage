@@ -2,6 +2,7 @@
 export {
   AppWindow,
   ArrowDown,
+  ArrowRight,
   ArrowUp,
   Ban,
   ExternalLink,
