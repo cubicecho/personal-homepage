@@ -4,6 +4,8 @@ import { parse } from 'yaml';
 import { PAGE_LIMIT_DEFAULTS } from '../../server/core/defaults.ts';
 import { ErrorCode } from '../../server/core/errors.ts';
 import { HOME_SLUG, ItemKind, itemsOf, OpensIn, type PageStore } from '../../server/pages/page.ts';
+import { parseWidget } from '../../server/pages/page-input.ts';
+import { HttpMethod, ValueFormat, WeatherUnits, WidgetType } from '../../server/pages/widget.ts';
 import { createYamlPageStore } from '../../server/pages/yaml-page-store.ts';
 import { linkFields, makeDataDir } from '../helpers.ts';
 
@@ -236,6 +238,7 @@ describe('YAML page store', () => {
               description: null,
               frameHeightPx: null,
               check: { enabled: true, url: null },
+              widget: null,
             },
             {
               id: 'router-2',
@@ -247,6 +250,7 @@ describe('YAML page store', () => {
               description: null,
               frameHeightPx: PAGE_LIMIT_DEFAULTS.maxFrameHeightPx,
               check: { enabled: true, url: null },
+              widget: null,
             },
           ],
         },
@@ -374,5 +378,114 @@ describe('YAML page store', () => {
     await writeFile(path.join(dir, 'site.yaml'), 'search:\n  defaultPrefix: g\npageOrder: []\n');
     await store.createPage({ title: 'Tools', icon: null });
     expect(await readYaml('site.yaml')).toEqual({ search: { defaultPrefix: 'g' }, pageOrder: ['tools'] });
+  });
+
+  describe('widgets', () => {
+    const queue = parseWidget({
+      type: WidgetType.Api,
+      refreshSeconds: 60,
+      api: {
+        url: 'http://sonarr.lan:8989/api/v3/queue',
+        method: HttpMethod.Post,
+        headers: [{ name: 'X-Api-Key', value: '${env:HOMEPAGE_SONARR_KEY}' }],
+        body: '{"page": 1}',
+        fields: [
+          { label: 'Downloading', path: '$.totalRecords', format: ValueFormat.Number, warnAbove: 10 },
+          { label: 'First', path: '$.records[0].title' },
+        ],
+      },
+    });
+    const weather = parseWidget({
+      type: WidgetType.Weather,
+      cacheSeconds: 600,
+      weather: { latitude: 52.37, longitude: 4.89, units: WeatherUnits.Imperial },
+    });
+
+    it('writes a widget as the issue sketches it, leaving defaults out, and reads it back the same', async () => {
+      const widgetFields = linkFields('Sonarr queue', {
+        kind: ItemKind.Widget,
+        url: null,
+        opensIn: null,
+        check: { enabled: false, url: null },
+        widget: queue,
+      });
+      await store.addItem(HOME_SLUG, null, widgetFields);
+      const page = await store.addItem(
+        HOME_SLUG,
+        null,
+        linkFields('Weather', {
+          kind: ItemKind.Widget,
+          opensIn: null,
+          check: { enabled: true, url: null },
+          widget: weather,
+        }),
+      );
+      expect(await readYaml('pages/home.yaml')).toEqual({
+        title: 'Home',
+        icon: 'house',
+        items: [
+          {
+            id: 'sonarr-queue',
+            kind: 'widget',
+            title: 'Sonarr queue',
+            widget: {
+              type: 'api',
+              refreshSeconds: 60,
+              url: 'http://sonarr.lan:8989/api/v3/queue',
+              method: 'post',
+              headers: { 'X-Api-Key': '${env:HOMEPAGE_SONARR_KEY}' },
+              body: '{"page": 1}',
+              fields: [
+                { label: 'Downloading', path: '$.totalRecords', format: 'number', warnAbove: 10 },
+                { label: 'First', path: '$.records[0].title' },
+              ],
+            },
+          },
+          {
+            id: 'weather',
+            kind: 'widget',
+            title: 'Weather',
+            url: 'http://nas.local:8096',
+            check: true,
+            widget: { type: 'weather', cacheSeconds: 600, latitude: 52.37, longitude: 4.89, units: 'imperial' },
+          },
+        ],
+      });
+      const reopened = await createYamlPageStore({ dataDir: dir });
+      expect(await reopened.find(HOME_SLUG)).toEqual(page);
+    });
+
+    it('reads a hand-written widget leniently, and refuses one that is missing what it needs', async () => {
+      await writeFile(
+        path.join(pagesDir(), 'feeds.yaml'),
+        [
+          'title: Feeds',
+          'items:',
+          '  - title: News',
+          '    kind: WIDGET',
+          '    widget: { type: RSS, url: "https://example.com/feed", limit: 999, cacheSeconds: 1 }',
+        ].join('\n'),
+      );
+      const feeds = await store.find('feeds');
+      expect(feeds === null ? null : itemsOf(feeds)[0]).toMatchObject({
+        id: 'news',
+        url: null,
+        check: { enabled: false },
+        widget: {
+          type: WidgetType.Rss,
+          cacheSeconds: PAGE_LIMIT_DEFAULTS.minWidgetCacheSeconds,
+          rss: { limit: PAGE_LIMIT_DEFAULTS.maxRssEntries },
+        },
+      });
+
+      await writeFile(
+        path.join(pagesDir(), 'broken.yaml'),
+        'title: Broken\nitems:\n  - title: Q\n    kind: widget\n    widget: { type: api, url: "http://q.lan" }\n',
+      );
+      await expect(store.find('broken')).rejects.toMatchObject({
+        extensions: { code: ErrorCode.NotFound },
+        message: expect.stringContaining('needs at least one field'),
+      });
+    });
   });
 });

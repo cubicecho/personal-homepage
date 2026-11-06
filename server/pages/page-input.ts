@@ -12,6 +12,8 @@ import {
   type PagePatch,
   type SectionFields,
 } from './page.ts';
+import type { Widget } from './widget.ts';
+import { widgetFromInput, widgetInputSchema } from './widget-input.ts';
 
 const {
   maxTitleLength,
@@ -86,12 +88,6 @@ const itemIcon = z
   .refine((value) => isIconRef(value, true), `${ICON_HINT} Or favicon.`)
   .nullable();
 
-const url = z
-  .string()
-  .trim()
-  .max(maxUrlLength)
-  .refine(isWebUrl, 'Use a full address starting with http:// or https://, for example http://nas.local:8096.');
-
 const newPageSchema = z.object({
   title,
   slug: z
@@ -116,7 +112,16 @@ const sectionSchema = z.object({
 const itemSchema = z.object({
   kind: z.enum(Object.values(ItemKind)),
   title,
-  url,
+  /** Required unless the kind is WIDGET: checked in `parseItemFields`. */
+  url: z
+    .string()
+    .trim()
+    .max(maxUrlLength)
+    .refine(
+      (value) => value === '' || isWebUrl(value),
+      'Use a full address starting with http:// or https://, for example http://nas.local:8096.',
+    )
+    .nullish(),
   opensIn: z.enum(Object.values(OpensIn)).nullish(),
   icon: itemIcon.optional().default(null),
   description: z.string().trim().max(maxDescriptionLength).nullish(),
@@ -128,6 +133,7 @@ const itemSchema = z.object({
     .max(maxUrlLength)
     .refine((value) => value === '' || isWebUrl(value), 'Check a full http:// or https:// address.')
     .nullish(),
+  widget: widgetInputSchema.nullish(),
 });
 
 /**
@@ -217,25 +223,49 @@ export function parseSectionFields(input: unknown): SectionFields {
 }
 
 /**
+ * Validates a widget on its own, as the editor's test sends it.
+ *
+ * @param input - `WidgetInput` as sent.
+ * @returns The widget, with its defaults filled in.
+ * @throws BAD_USER_INPUT when a setting is out of bounds, a path can't be read or a URL is not http(s).
+ */
+export function parseWidget(input: unknown): Widget {
+  return widgetFromInput(parseOrRefuse(widgetInputSchema, input));
+}
+
+/**
  * Validates an item's fields.
  *
  * @param input - `ItemInput` as sent.
- * @returns The fields. A blank description or check URL is null; the frame height is null unless the
- * kind is FRAME, and `opensIn` is null unless it is LINK, where it defaults to a new tab. Checking is on
- * unless turned off.
- * @throws BAD_USER_INPUT when a field is out of bounds or a URL is not http(s).
+ * @returns The fields. A blank description, URL or check URL is null; the frame height is null unless
+ * the kind is FRAME, `opensIn` is null unless it is LINK (where it defaults to a new tab), and `widget`
+ * is null unless it is WIDGET. Checking is on unless turned off, except for a widget, where it is off
+ * unless turned on.
+ * @throws BAD_USER_INPUT when a field is out of bounds, a URL is not http(s), a link or frame has no
+ * URL, or a widget has no settings.
  */
 export function parseItemFields(input: unknown): ItemFields {
   const parsed = parseOrRefuse(itemSchema, input);
   const isFrame = parsed.kind === ItemKind.Frame;
+  const isLink = parsed.kind === ItemKind.Link;
+  const isWidget = parsed.kind === ItemKind.Widget;
+  const url = blankToNull(parsed.url);
+  if (url === null && isWidget === false) {
+    throw badInput('url: Give it an address.');
+  }
+  const widgetInput = parsed.widget ?? null;
+  if (isWidget && widgetInput === null) {
+    throw badInput('widget: A widget needs its settings.');
+  }
   return {
     kind: parsed.kind,
     title: parsed.title,
-    url: parsed.url,
-    opensIn: isFrame ? null : (parsed.opensIn ?? OpensIn.NewTab),
+    url,
+    opensIn: isLink ? (parsed.opensIn ?? OpensIn.NewTab) : null,
     icon: parsed.icon,
     description: blankToNull(parsed.description),
     frameHeightPx: isFrame ? (parsed.frameHeightPx ?? defaultFrameHeightPx) : null,
-    check: { enabled: parsed.checkEnabled ?? true, url: blankToNull(parsed.checkUrl) },
+    check: { enabled: parsed.checkEnabled ?? isWidget === false, url: blankToNull(parsed.checkUrl) },
+    widget: isWidget && widgetInput !== null ? widgetFromInput(widgetInput) : null,
   };
 }

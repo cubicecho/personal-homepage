@@ -46,6 +46,7 @@ describe('parseItemFields', () => {
       description: null,
       frameHeightPx: null,
       check: { enabled: true, url: null },
+      widget: null,
     });
   });
 
