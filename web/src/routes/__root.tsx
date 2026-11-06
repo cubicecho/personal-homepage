@@ -1,6 +1,17 @@
-import { createLink, createRootRoute, Link, Outlet, useNavigate, useParams } from '@tanstack/react-router';
-import { House } from 'lucide-react';
-import { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import {
+  createLink,
+  createRootRoute,
+  Link,
+  Outlet,
+  useNavigate,
+  useParams,
+  useRouterState,
+} from '@tanstack/react-router';
+import { House, LogOut } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { ACCESS_KEY, useAccess, useCanEdit, useSignOut } from '@/auth/use-access';
+import { CenteredLayout } from '@/components/centered-layout';
 import { EmptyState } from '@/components/empty-state';
 import { QueryState } from '@/components/query-state';
 import { RouteError } from '@/components/route-error';
@@ -14,11 +25,12 @@ import {
 } from '@/components/sidebar';
 import { SidebarLayout } from '@/components/split-layout';
 import { Button } from '@/components/ui/button';
-import { Plus } from '@/components/ui/icons';
+import { Plus, Settings } from '@/components/ui/icons';
 import { Menu, MenuContent, MenuItem, MenuTrigger } from '@/components/ui/menu';
 import { ThemePicker } from '@/components/ui/theme-picker';
 import { useThemePreference } from '@/components/ui/theme-preference';
 import { LayoutGrid } from '@/core/app-icons';
+import { setUnauthenticatedHandler } from '@/core/gql';
 import { iconElement } from '@/core/page-icons';
 import { ExportButton } from '@/export/export-button';
 import { PageDialog } from '@/pages/page-dialog';
@@ -32,6 +44,9 @@ const SidebarLink = createLink(SidebarNavItem);
 const BarLink = createLink(BarNavItem);
 /** How many pages the phone bar has room for beside the brand and its buttons; the rest are in its menu. */
 const BAR_PAGE_COUNT = 4;
+/** The pages drawn without the shell: signing in happens before there is anything to show in it. */
+const BARE_PATHS = ['/login', '/auth/sso'];
+const SETTINGS_PATH = '/settings';
 
 export const Route = createRootRoute({
   component: RootRoute,
@@ -84,15 +99,44 @@ function FoldedNewPageRow({ label, onPress }: { label: string; onPress: () => vo
 }
 
 /**
- * The sidebar's footer: the zip download, the theme and the fold button, as icons while folded.
+ * The sidebar's rows for settings and, when someone signed in through the provider, signing out.
  *
+ * @param props - Where the browser is.
+ * @param props.isSettings - Whether the settings page is open.
+ * @returns The rows.
+ */
+function AccountRows({ isSettings }: { isSettings: boolean }) {
+  const viewer = useAccess().data?.viewer ?? null;
+  const signOut = useSignOut();
+  const navigate = useNavigate();
+  const isOidc = viewer?.via === 'OIDC';
+  return (
+    <>
+      <SidebarLink to={SETTINGS_PATH} label="Settings" iconSlot={<Settings />} active={isSettings} />
+      {isOidc ? (
+        <SidebarNavItem
+          label={`Sign out ${viewer.name ?? viewer.email}`}
+          iconSlot={<LogOut />}
+          onClick={() => signOut.mutate(undefined, { onSettled: () => void navigate({ to: '/login' }) })}
+        />
+      ) : null}
+    </>
+  );
+}
+
+/**
+ * The sidebar's footer: settings, the zip download, the theme and the fold button, as icons while folded.
+ *
+ * @param props - Where the browser is.
+ * @param props.isSettings - Whether the settings page is open.
  * @returns The footer's rows.
  */
-function SidebarFooter() {
+function SidebarFooter({ isSettings }: { isSettings: boolean }) {
   const { collapsed } = useSidebar();
   const shortcut = `${commandKeyLabel()} B`;
   return (
     <div className={collapsed ? 'flex flex-col items-center gap-2' : 'flex flex-col gap-2'}>
+      <AccountRows isSettings={isSettings} />
       <ExportButton compact={collapsed} />
       {collapsed ? <ThemeMenu /> : <ThemePicker variant="compact" />}
       <SidebarCollapseButton
@@ -114,15 +158,54 @@ function pageIcon(page: Page) {
 }
 
 /**
- * The app shell: every page in the sidebar beside whichever page the route draws.
+ * Decides what the whole app draws: the sign-in pages bare, the sign-in page for someone who may not see
+ * the homepage, and the shell for everyone else.
  *
  * @remarks
- * The theme preference is applied here, once for every page, and the new-page dialog lives here
- * because both the sidebar and the phone bar open it.
+ * The theme preference is applied here, once for every page. A request the server answers with
+ * UNAUTHENTICATED (a session that ended) re-reads who is signed in, which lands here.
  */
 function RootRoute() {
   useThemePreference();
+  const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
+  const access = useAccess();
+  const isBare = BARE_PATHS.includes(pathname);
+  const mustSignIn = access.data?.canView === false;
+
+  useEffect(() => {
+    setUnauthenticatedHandler(() => void queryClient.invalidateQueries({ queryKey: ACCESS_KEY }));
+  }, [queryClient]);
+  useEffect(() => {
+    if (mustSignIn && isBare === false) {
+      void navigate({ to: '/login', replace: true });
+    }
+  }, [mustSignIn, isBare, navigate]);
+
+  if (isBare) {
+    return <Outlet />;
+  }
+  if (access.data === undefined || mustSignIn) {
+    // Who is asking decides what there is to draw, so nothing is drawn until the server has said.
+    return <CenteredLayout title="Homepage" loading contentSlot={null} />;
+  }
+  return <Shell isSettings={pathname === SETTINGS_PATH} />;
+}
+
+/**
+ * The app shell: every page in the sidebar beside whichever page the route draws.
+ *
+ * @param props - Where the browser is.
+ * @param props.isSettings - Whether the settings page is open, for its row.
+ * @returns The shell.
+ *
+ * @remarks
+ * The new-page dialog lives here because both the sidebar and the phone bar open it.
+ */
+function Shell({ isSettings }: { isSettings: boolean }) {
+  const navigate = useNavigate();
+  const canEdit = useCanEdit();
   const query = usePages();
   const pages = query.data ?? [];
   const { slug } = useParams({ strict: false });
@@ -172,6 +255,13 @@ function RootRoute() {
         actionSlot={
           <>
             <SearchButton variant="icon" />
+            <Button
+              variant="outline"
+              size="icon-sm"
+              aria-label="Settings"
+              iconSlot={<Settings />}
+              linkSlot={<Link to={SETTINGS_PATH} />}
+            />
             {hasMorePages ? (
               <Menu>
                 <MenuTrigger asChild>
@@ -189,13 +279,15 @@ function RootRoute() {
                 </MenuContent>
               </Menu>
             ) : null}
-            <Button
-              variant="outline"
-              size="icon-sm"
-              aria-label={newPageLabel}
-              iconSlot={<Plus />}
-              onClick={startCreating}
-            />
+            {canEdit ? (
+              <Button
+                variant="outline"
+                size="icon-sm"
+                aria-label={newPageLabel}
+                iconSlot={<Plus />}
+                onClick={startCreating}
+              />
+            ) : null}
             <div className="w-28">
               <ThemePicker variant="compact" />
             </div>
@@ -213,13 +305,15 @@ function RootRoute() {
                   as="nav"
                   title="Pages"
                   actionSlot={
-                    <Button
-                      variant="outline"
-                      size="icon-xs"
-                      aria-label={newPageLabel}
-                      iconSlot={<Plus />}
-                      onClick={startCreating}
-                    />
+                    canEdit ? (
+                      <Button
+                        variant="outline"
+                        size="icon-xs"
+                        aria-label={newPageLabel}
+                        iconSlot={<Plus />}
+                        onClick={startCreating}
+                      />
+                    ) : null
                   }
                   status={
                     <QueryState
@@ -241,10 +335,10 @@ function RootRoute() {
                     />
                   ))}
                 />
-                <FoldedNewPageRow label={newPageLabel} onPress={startCreating} />
+                {canEdit ? <FoldedNewPageRow label={newPageLabel} onPress={startCreating} /> : null}
               </>
             }
-            footerSlot={<SidebarFooter />}
+            footerSlot={<SidebarFooter isSettings={isSettings} />}
           />
         }
         contentSlot={<Outlet />}

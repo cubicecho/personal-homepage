@@ -10,7 +10,7 @@
   },
   "scripts": {
     "dev": "concurrently -n server,web -c cyan,magenta \"npm:dev:server\" \"npm:dev:web\"",
-    "dev:server": "PORT=8787 node --env-file-if-exists=.env --watch server/index.ts",
+    "dev:server": "PORT=8787 APP_URL=${APP_URL:-http://localhost:3000} node --env-file-if-exists=.env --watch server/index.ts",
     "dev:web": "vite --host 0.0.0.0",
     "build": "npm run codegen && vite build",
     "start": "NODE_ENV=production node --env-file-if-exists=.env server/index.ts",

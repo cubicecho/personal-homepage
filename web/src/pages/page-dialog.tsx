@@ -1,5 +1,7 @@
 import { useState } from 'react';
-import { InputField, useAppForm } from '@/components/app-form';
+import { useKnownGroups, VISIBLE_TO_COPY } from '@/auth/known-groups';
+import { useAccess } from '@/auth/use-access';
+import { ComboboxField, InputField, useAppForm } from '@/components/app-form';
 import { DialogLayout } from '@/components/dialog-layout';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -23,6 +25,8 @@ interface PageDraft {
   title: string;
   slug: string;
   icon: string | null;
+  /** The groups that may see it; empty for everyone. */
+  visibleTo: string[];
 }
 
 /** Creates a page, or changes one's title and icon. */
@@ -32,8 +36,15 @@ export function PageDialog({ open, onOpenChange, page, onSaved }: PageDialogProp
   const updatePage = useUpdatePage();
   const [serverError, setServerError] = useState<string | undefined>(undefined);
   const isEdit = page !== undefined;
+  const isSignInSet = useAccess().data?.mode === 'SIGN_IN';
+  const knownGroups = useKnownGroups();
 
-  const defaultValues: PageDraft = { title: page?.title ?? '', slug: '', icon: page?.icon ?? null };
+  const defaultValues: PageDraft = {
+    title: page?.title ?? '',
+    slug: '',
+    icon: page?.icon ?? null,
+    visibleTo: page?.visibleTo ?? [],
+  };
   const form = useAppForm({
     defaultValues,
     onSubmit: async ({ value }) => {
@@ -42,8 +53,16 @@ export function PageDialog({ open, onOpenChange, page, onSaved }: PageDialogProp
         const title = value.title.trim();
         const slug = value.slug.trim();
         const saved = isEdit
-          ? await updatePage.mutateAsync({ slug: page.slug, input: { title, icon: value.icon } })
-          : await createPage.mutateAsync({ title, icon: value.icon, ...(slug === '' ? {} : { slug }) });
+          ? await updatePage.mutateAsync({
+              slug: page.slug,
+              input: { title, icon: value.icon, visibleTo: value.visibleTo },
+            })
+          : await createPage.mutateAsync({
+              title,
+              icon: value.icon,
+              visibleTo: value.visibleTo,
+              ...(slug === '' ? {} : { slug }),
+            });
         onOpenChange(false);
         onSaved?.(saved);
       } catch (error) {
@@ -85,6 +104,19 @@ export function PageDialog({ open, onOpenChange, page, onSaved }: PageDialogProp
             />
           )}
           <IconField form={form} name="icon" label="Icon" />
+          {isSignInSet ? (
+            <ComboboxField
+              form={form}
+              name="visibleTo"
+              label={VISIBLE_TO_COPY.label}
+              description={VISIBLE_TO_COPY.description}
+              placeholder={VISIBLE_TO_COPY.placeholder}
+              createLabel={VISIBLE_TO_COPY.createLabel}
+              multiple
+              freeText
+              options={knownGroups}
+            />
+          ) : null}
           {serverError === undefined ? null : (
             <Alert variant="destructive" title="Not saved" description={serverError} />
           )}

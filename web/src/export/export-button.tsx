@@ -1,3 +1,4 @@
+import { sessionHeaders } from '@/auth/session';
 import { DownloadButton } from '@/components/ui/download-button';
 import { useToast } from '@/components/ui/toast';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -18,7 +19,23 @@ function exportFilename(date: Date): string {
   return `homepage-${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}.zip`;
 }
 
+/**
+ * Fetches the zip with this browser's session: once sign-in is set up, the server zips only what the
+ * signed-in person may see, and a link the browser follows on its own would carry no session.
+ *
+ * @returns The zip.
+ * @throws When the server refuses or fails.
+ */
+async function fetchExport(): Promise<Blob> {
+  const response = await fetch(EXPORT_URL, { headers: sessionHeaders() });
+  if (response.ok === false) {
+    throw new Error(`The server answered ${response.status}.`);
+  }
+  return response.blob();
+}
+
 const LABEL = 'Download as zip';
+const MIME_TYPE = 'application/zip';
 
 interface ExportButtonProps {
   /** Draw the icon alone, named and tooltipped by its label: for the folded sidebar. */
@@ -26,7 +43,7 @@ interface ExportButtonProps {
 }
 
 /**
- * Downloads every page's YAML file, and site.yaml, as one zip.
+ * Downloads every page this browser may see, and the site settings, as one zip of YAML files.
  *
  * @param props - How much room it has.
  * @param props.compact - Draw the icon alone, with the label as its name and tooltip.
@@ -46,7 +63,8 @@ export function ExportButton({ compact = false }: ExportButtonProps) {
               size="icon-sm"
               label={LABEL}
               filename={filename}
-              href={EXPORT_URL}
+              mimeType={MIME_TYPE}
+              source={fetchExport}
               onError={onError}
             />
           </span>
@@ -60,7 +78,8 @@ export function ExportButton({ compact = false }: ExportButtonProps) {
       size="sm"
       label={LABEL}
       filename={filename}
-      href={EXPORT_URL}
+      mimeType={MIME_TYPE}
+      source={fetchExport}
       onError={onError}
       className="w-full"
     />

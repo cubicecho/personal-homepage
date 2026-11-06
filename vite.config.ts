@@ -31,6 +31,9 @@ export default defineConfig({
       '/healthz': API_ORIGIN,
       '/export.zip': API_ORIGIN,
       '/icons/': API_ORIGIN,
+      // The OIDC sign-in's start and callback (server/http/sso.ts).
+      '/sso/': API_ORIGIN,
+      '/api/auth/': API_ORIGIN,
     },
   },
   preview: WEB_SERVER,

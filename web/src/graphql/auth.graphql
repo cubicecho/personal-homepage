@@ -1,0 +1,64 @@
+query Access {
+  access {
+    mode
+    canView
+    canEdit
+    viewer {
+      id
+      name
+      email
+      groups
+      isAdmin
+      via
+    }
+  }
+}
+
+query AuthConfig {
+  authConfig {
+    mode
+    forwardAuth
+    publicView
+    sso {
+      name
+      signInUrl
+    }
+  }
+}
+
+query SsoSetup {
+  ssoSetup {
+    source
+    issuer
+    name
+    canPair
+    redirectUri
+  }
+}
+
+mutation PairSso($setupUrl: String!) {
+  pairSso(setupUrl: $setupUrl) {
+    source
+    name
+    canPair
+  }
+}
+
+mutation UnpairSso {
+  unpairSso {
+    source
+  }
+}
+
+mutation VerifyOneTimeToken($token: String!) {
+  verifyOneTimeToken(token: $token) {
+    token
+    userId
+  }
+}
+
+mutation SignOut {
+  signOut {
+    success
+  }
+}

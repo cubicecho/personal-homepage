@@ -1,5 +1,7 @@
 import { useState } from 'react';
-import { CheckboxField, InputField, useAppForm } from '@/components/app-form';
+import { useKnownGroups, VISIBLE_TO_COPY } from '@/auth/known-groups';
+import { useAccess } from '@/auth/use-access';
+import { CheckboxField, ComboboxField, InputField, useAppForm } from '@/components/app-form';
 import { DialogLayout } from '@/components/dialog-layout';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -21,6 +23,8 @@ interface SectionDialogProps {
 interface SectionDraft {
   title: string;
   collapsed: boolean;
+  /** The groups that may see it; empty for everyone. */
+  visibleTo: string[];
 }
 
 /** Adds a section to a page, or changes one's heading and whether it starts folded. */
@@ -30,15 +34,21 @@ export function SectionDialog({ open, onOpenChange, page, section }: SectionDial
   const updateSection = useUpdateSection();
   const [serverError, setServerError] = useState<string | undefined>(undefined);
   const isEdit = section !== undefined;
+  const isSignInSet = useAccess().data?.mode === 'SIGN_IN';
+  const knownGroups = useKnownGroups();
 
-  const defaultValues: SectionDraft = { title: section?.title ?? '', collapsed: section?.collapsed ?? false };
+  const defaultValues: SectionDraft = {
+    title: section?.title ?? '',
+    collapsed: section?.collapsed ?? false,
+    visibleTo: section?.visibleTo ?? [],
+  };
   const form = useAppForm({
     defaultValues,
     onSubmit: async ({ value }) => {
       setServerError(undefined);
       try {
         const title = value.title.trim();
-        const input = { title: title === '' ? null : title, collapsed: value.collapsed };
+        const input = { title: title === '' ? null : title, collapsed: value.collapsed, visibleTo: value.visibleTo };
         if (isEdit) {
           await updateSection.mutateAsync({ pageSlug: page.slug, id: section.id, input });
         } else {
@@ -75,6 +85,19 @@ export function SectionDialog({ open, onOpenChange, page, section }: SectionDial
             label="Start folded"
             description="Shown folded until someone opens it. Each browser remembers its own choice after that."
           />
+          {isSignInSet ? (
+            <ComboboxField
+              form={form}
+              name="visibleTo"
+              label={VISIBLE_TO_COPY.label}
+              description={VISIBLE_TO_COPY.description}
+              placeholder={VISIBLE_TO_COPY.placeholder}
+              createLabel={VISIBLE_TO_COPY.createLabel}
+              multiple
+              freeText
+              options={knownGroups}
+            />
+          ) : null}
           {serverError === undefined ? null : (
             <Alert variant="destructive" title="Not saved" description={serverError} />
           )}

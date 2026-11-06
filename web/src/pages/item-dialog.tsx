@@ -1,6 +1,16 @@
 import { useState } from 'react';
 import type { ItemInput, ItemKind, OpensIn } from '@/__generated__/graphql';
-import { InputField, NumberField, SelectField, SwitchField, TextareaField, useAppForm } from '@/components/app-form';
+import { useKnownGroups, VISIBLE_TO_COPY } from '@/auth/known-groups';
+import { useAccess } from '@/auth/use-access';
+import {
+  ComboboxField,
+  InputField,
+  NumberField,
+  SelectField,
+  SwitchField,
+  TextareaField,
+  useAppForm,
+} from '@/components/app-form';
 import { DialogLayout } from '@/components/dialog-layout';
 import { RadioGroupField, type RadioOption } from '@/components/radio-group-field';
 import { Alert } from '@/components/ui/alert';
@@ -41,6 +51,8 @@ interface ItemDraft {
   checkUrl: string;
   /** A widget's settings. Kept while another kind is chosen, so switching back loses nothing. */
   widget: WidgetDraft;
+  /** The groups that may see it; empty for everyone. */
+  visibleTo: string[];
 }
 
 const KIND_OPTIONS: readonly RadioOption[] = Object.entries(ITEM_KINDS).map(([kind, { Glyph, label, summary }]) => ({
@@ -84,6 +96,7 @@ function toInput(draft: ItemDraft): ItemInput {
     checkEnabled: draft.checkEnabled && hasSomethingToCheck,
     checkUrl: draft.checkUrl.trim(),
     widget: isWidget ? toWidgetInput(draft.widget) : null,
+    visibleTo: draft.visibleTo,
   };
 }
 
@@ -94,6 +107,8 @@ export function ItemDialog({ open, onOpenChange, page, item, sectionId }: ItemDi
   const updateItem = useUpdateItem();
   const [serverError, setServerError] = useState<string | undefined>(undefined);
   const isEdit = item !== undefined;
+  const isSignInSet = useAccess().data?.mode === 'SIGN_IN';
+  const knownGroups = useKnownGroups();
   const shouldPickSection = isEdit === false && page.sections.length > 1;
   const sectionOptions = page.sections.map((section) => ({ value: section.id, label: sectionLabel(section) }));
   const heightBounds = limits && { min: limits.minFrameHeightPx, max: limits.maxFrameHeightPx };
@@ -110,6 +125,7 @@ export function ItemDialog({ open, onOpenChange, page, item, sectionId }: ItemDi
     checkEnabled: item?.checkEnabled ?? true,
     checkUrl: item?.checkUrl ?? '',
     widget: widgetDraftOf(item?.widget ?? null),
+    visibleTo: item?.visibleTo ?? [],
   };
   const form = useAppForm({
     defaultValues,
@@ -242,6 +258,19 @@ export function ItemDialog({ open, onOpenChange, page, item, sectionId }: ItemDi
             }
           </form.Subscribe>
           <IconField form={form} name="icon" label="Icon" allowFavicon />
+          {isSignInSet ? (
+            <ComboboxField
+              form={form}
+              name="visibleTo"
+              label={VISIBLE_TO_COPY.label}
+              description={VISIBLE_TO_COPY.description}
+              placeholder={VISIBLE_TO_COPY.placeholder}
+              createLabel={VISIBLE_TO_COPY.createLabel}
+              multiple
+              freeText
+              options={knownGroups}
+            />
+          ) : null}
           <SwitchField
             form={form}
             name="checkEnabled"
