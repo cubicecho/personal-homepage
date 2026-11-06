@@ -88,6 +88,71 @@ export const weatherApiUrl = (): string => {
   return raw === '' ? WIDGET_DEFAULTS.weatherApiUrl : raw;
 };
 
+/** The value that turns a switch off. */
+const SWITCH_OFF = 'false';
+/** The Docker socket read when `DOCKER_SOCKET` is unset. */
+export const DEFAULT_DOCKER_SOCKET = '/var/run/docker.sock';
+/** The only schemes DOCKHAND_URL may use. */
+const WEB_PROTOCOLS = ['http:', 'https:'];
+
+/**
+ * Whether the server watches mDNS for apps.
+ *
+ * @returns False only when `DISCOVERY_MDNS` is "false".
+ */
+export const discoveryMdns = (): boolean => (process.env.DISCOVERY_MDNS ?? '').trim().toLowerCase() !== SWITCH_OFF;
+
+/**
+ * Where Dockhand is, to ask it for containers.
+ *
+ * @returns `DOCKHAND_URL` without a trailing slash, or an empty string when unset.
+ */
+export const dockhandUrl = (): string => (process.env.DOCKHAND_URL ?? '').trim().replace(/\/+$/, '');
+
+/**
+ * The API token Dockhand is asked with.
+ *
+ * @returns `DOCKHAND_TOKEN`, or an empty string when unset.
+ */
+export const dockhandToken = (): string => (process.env.DOCKHAND_TOKEN ?? '').trim();
+
+/**
+ * The Docker socket to read containers from.
+ *
+ * @returns `DOCKER_SOCKET`, or an empty string when unset, in which case the usual path is tried.
+ */
+export const dockerSocket = (): string => (process.env.DOCKER_SOCKET ?? '').trim();
+
+/**
+ * The name other devices reach this Docker host by, for the addresses of its containers.
+ *
+ * @returns `DISCOVERY_DOCKER_HOST`, or an empty string when unset.
+ */
+export const discoveryDockerHost = (): string => (process.env.DISCOVERY_DOCKER_HOST ?? '').trim();
+
+/**
+ * Checks the Dockhand settings before anything asks it.
+ *
+ * @param url - `DOCKHAND_URL`.
+ * @param token - `DOCKHAND_TOKEN`.
+ * @returns What is wrong, as a sentence that says how to fix it; null when they are usable or both unset.
+ */
+export function dockhandProblem(url: string, token: string): string | null {
+  const isUnset = url === '' && token === '';
+  if (isUnset) {
+    return null;
+  }
+  const isHalfSet = url === '' || token === '';
+  if (isHalfSet) {
+    return 'Set both DOCKHAND_URL and DOCKHAND_TOKEN to find containers through Dockhand, or neither.';
+  }
+  const isWebUrl = URL.canParse(url) && WEB_PROTOCOLS.includes(new URL(url).protocol);
+  if (isWebUrl === false) {
+    return `DOCKHAND_URL is "${url}". Use Dockhand's address, for example http://dockhand.lan:3000.`;
+  }
+  return null;
+}
+
 /**
  * Express `trust proxy`: which hops may set X-Forwarded-For.
  *

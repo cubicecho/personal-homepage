@@ -4,7 +4,7 @@
 // arbitrary address. The image is served from this origin, so it is sent with a policy that stops an
 // SVG's scripts from running if someone opens it as a page.
 import path from 'node:path';
-import type { Express } from 'express';
+import type { Express, Request as ExpressRequest, Response as ExpressResponse } from 'express';
 import { type IconLinks, isSignedIconPath } from '../auth/icon-links.ts';
 import { ICON_DEFAULTS } from '../core/defaults.ts';
 import { HttpStatus } from '../core/wire.ts';
@@ -16,6 +16,7 @@ import type { Clock, Fetch } from './fetching.ts';
 /** Where icon images are served under. */
 export const ICONS_PATH_PREFIX = '/icons/';
 const FAVICON_ROUTE = `${ICONS_PATH_PREFIX}favicon/:pageSlug/:itemId`;
+const DISCOVERED_FAVICON_ROUTE = `${ICONS_PATH_PREFIX}discovered/:id`;
 /** Where favicons are kept, under the data directory. */
 export const FAVICON_CACHE_DIR = path.join('cache', 'favicons');
 /** Served with every icon: no script runs and nothing loads if it is opened as a page. */
@@ -32,8 +33,23 @@ export function faviconPath(pageSlug: string, itemId: string): string {
   return `${ICONS_PATH_PREFIX}favicon/${encodeURIComponent(pageSlug)}/${encodeURIComponent(itemId)}`;
 }
 
+/**
+ * Names the address a discovered app's favicon is served at.
+ *
+ * @param id - The discovered app's id.
+ * @returns The path, under ICONS_PATH_PREFIX.
+ */
+export function discoveredFaviconPath(id: string): string {
+  return `${ICONS_PATH_PREFIX}discovered/${encodeURIComponent(id)}`;
+}
+
 /** What the icon routes can be given in tests. */
 export interface IconRouteOptions {
+  /**
+   * Finds the address of a discovered app, so its favicon can be served before it is on a page. Left out,
+   * discovered apps get no favicon.
+   */
+  discoveredUrl?: (id: string) => Promise<string | null>;
   /**
    * How icon links are signed now. Asked per request: pairing a provider turns signing on while the
    * server runs. Left out, links need no proof.
@@ -80,17 +96,29 @@ export function mountIcons(app: Express, pages: PageStore, dataDir: string, opti
     now: options.now ?? Date.now,
   });
 
-  app.get(FAVICON_ROUTE, async (req, res) => {
-    const { pageSlug, itemId } = req.params;
+  /**
+   * Answers a request for a favicon the server fetches itself.
+   *
+   * @param req - The request.
+   * @param res - The response.
+   * @param path - The path the link was signed for.
+   * @param siteUrlOf - Finds the address of the site whose favicon it is.
+   */
+  const serveFavicon = async (
+    req: ExpressRequest,
+    res: ExpressResponse,
+    path: string,
+    siteUrlOf: () => Promise<string | null>,
+  ): Promise<void> => {
     const links = options.iconLinks?.();
     const query = new URLSearchParams(req.originalUrl.split('?')[1] ?? '');
-    const isAllowed = links === undefined || isSignedIconPath(faviconPath(pageSlug, itemId), query, links);
+    const isAllowed = links === undefined || isSignedIconPath(path, query, links);
     if (isAllowed === false) {
       // The same answer as an item with no icon, so a missing proof says nothing about what exists.
       res.status(HttpStatus.NotFound).type('text/plain').send('No icon.');
       return;
     }
-    const siteUrl = await storedItemUrl(pages, pageSlug, itemId);
+    const siteUrl = await siteUrlOf();
     const favicon = siteUrl === null ? null : await favicons.get(siteUrl);
     if (favicon === null) {
       res.status(HttpStatus.NotFound).type('text/plain').send('No icon.');
@@ -109,5 +137,19 @@ export function mountIcons(app: Express, pages: PageStore, dataDir: string, opti
       return;
     }
     res.type(favicon.contentType).send(Buffer.from(favicon.body));
+  };
+
+  app.get(FAVICON_ROUTE, (req, res) => {
+    const { pageSlug, itemId } = req.params;
+    return serveFavicon(req, res, faviconPath(pageSlug, itemId), () => storedItemUrl(pages, pageSlug, itemId));
+  });
+
+  app.get(DISCOVERED_FAVICON_ROUTE, (req, res) => {
+    const { id } = req.params;
+    const discoveredUrl = options.discoveredUrl;
+    // Only an app the server found can be asked about, as only a stored item can above.
+    return serveFavicon(req, res, discoveredFaviconPath(id), async () =>
+      discoveredUrl === undefined ? null : discoveredUrl(id),
+    );
   });
 }

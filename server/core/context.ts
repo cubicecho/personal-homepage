@@ -5,6 +5,7 @@ import type { ForwardAuth } from '../auth/forward-auth.ts';
 import type { IconLinks } from '../auth/icon-links.ts';
 import type { RateLimiter } from '../auth/rate-limit.ts';
 import type { Database } from '../db/client.ts';
+import type { DiscoveryService } from '../discovery/service.ts';
 import type { FrameChecker } from '../frames/frame-check.ts';
 import type { IconService } from '../icons/icon-service.ts';
 import type { PageStore } from '../pages/page.ts';
@@ -29,6 +30,8 @@ export interface Services {
   site: SiteSettings;
   /** Fetches widgets' data. */
   widgets: WidgetService;
+  /** Finds apps on the network and keeps them as suggestions. */
+  discovery: DiscoveryService;
   /** The database users, sessions and the OIDC pairing are kept in. */
   db: Database;
   /** Hands out the current better-auth instance. Pairing a provider rebuilds it while the server runs. */

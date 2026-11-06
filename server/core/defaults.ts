@@ -332,3 +332,60 @@ export const RATE_LIMIT_DEFAULTS: Readonly<RateLimitSettings> = Object.freeze({
   windowMinutes: 15,
   sweepAtKeys: 10_000,
 });
+
+/** How the server finds apps on the network (server/discovery/). */
+export interface DiscoverySettings {
+  /** Time between two polls of Dockhand and the Docker socket, in minutes. mDNS is watched all the time. */
+  pollMinutes: number;
+  /** How long one request to a source (Dockhand, the Docker socket) may take, in seconds. */
+  sourceTimeoutSeconds: number;
+  /** How long fetching a page or manifest to describe an app may take, in seconds. */
+  describeTimeoutSeconds: number;
+  /** Largest page read to describe an app, in bytes. Only its head is needed. */
+  maxPageBytes: number;
+  /** Largest web manifest read, in bytes. */
+  maxManifestBytes: number;
+  /** Most redirects followed on the same host when describing an app. */
+  maxRedirects: number;
+  /** How long a description of an address is reused, in minutes. A failed one is asked again sooner. */
+  describeCacheMinutes: number;
+  /** How long a failed description is remembered before the address is asked again, in minutes. */
+  failedDescribeCacheMinutes: number;
+  /** Most descriptions kept in memory. */
+  maxCachedDescriptions: number;
+  /** Most addresses described at once during a scan. */
+  describeConcurrency: number;
+  /** Icons smaller than this are passed over when a larger one exists, in pixels. */
+  minIconSizePx: number;
+  /** The icon size picked when there is a choice: the one closest to it, in pixels. */
+  preferredIconSizePx: number;
+  /** How long a scan waits for mDNS answers after asking again, in seconds. */
+  mdnsSettleSeconds: number;
+  /** The mDNS service types browsed, without the leading underscore and `._tcp`. */
+  mdnsTypes: readonly string[];
+  /** Container ports taken to be a web interface first, in order, when a container publishes several. */
+  webPorts: readonly number[];
+  /** Container ports served over https. */
+  httpsPorts: readonly number[];
+}
+
+export const DISCOVERY_DEFAULTS: Readonly<DiscoverySettings> = Object.freeze({
+  pollMinutes: 5,
+  sourceTimeoutSeconds: 10,
+  describeTimeoutSeconds: 5,
+  maxPageBytes: 524_288,
+  maxManifestBytes: 131_072,
+  maxRedirects: 3,
+  describeCacheMinutes: 60,
+  failedDescribeCacheMinutes: 5,
+  maxCachedDescriptions: 500,
+  describeConcurrency: 6,
+  minIconSizePx: 48,
+  preferredIconSizePx: 192,
+  mdnsSettleSeconds: 2,
+  mdnsTypes: Object.freeze(['http', 'https', 'home-assistant', 'octoprint', 'ipp', 'ipps']),
+  // biome-ignore lint/style/noMagicNumbers: a list of port numbers is the data this setting holds.
+  webPorts: [80, 443, 8080, 8443, 3000, 8000, 8096, 9000, 5000, 8081, 8888],
+  // biome-ignore lint/style/noMagicNumbers: a list of port numbers is the data this setting holds.
+  httpsPorts: [443, 8443, 9443],
+});

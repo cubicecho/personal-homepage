@@ -31,6 +31,7 @@
     "@radix-ui/react-slot": "^1.5.0",
     "@tanstack/react-form": "^1.33.5",
     "better-auth": "^1.7.18",
+    "bonjour-service": "^1.4.4",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",

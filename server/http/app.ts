@@ -11,6 +11,9 @@ import { authSecret, forwardAuthTrustedProxies, isProduction, trustProxy, weathe
 import { type Context, type Services, UNKNOWN_IP } from '../core/context.ts';
 import { HTTP_DEFAULTS } from '../core/defaults.ts';
 import type { Database } from '../db/client.ts';
+import { createDescriber } from '../discovery/describe.ts';
+import { createDiscoveryService } from '../discovery/service.ts';
+import { createDiscoveryStore } from '../discovery/store.ts';
 import { mountExport } from '../export/zip-export.ts';
 import { createFrameChecker } from '../frames/frame-check.ts';
 import { graphqlLogger } from '../graphql/logger.ts';
@@ -101,6 +104,10 @@ export function createApp({
     frames: deps.frames ?? createFrameChecker(),
     icons: deps.icons ?? createIconService({ dataDir }),
     widgets: deps.widgets ?? createWidgetService({ weatherApiUrl: weatherApiUrl() }, { dataDir }),
+    // With no sources it only keeps what is recorded; boot passes the one the environment sets up.
+    discovery:
+      deps.discovery ??
+      createDiscoveryService({ store: createDiscoveryStore(deps.db), describer: createDescriber(), sources: [] }),
   };
   const iconLinks = (): IconLinks => ({
     isRequired: authModeOf(services) === AuthMode.SignIn,
@@ -135,7 +142,10 @@ export function createApp({
   app.all(GRAPHQL_ENDPOINT, (req, res) => yoga(req, res, { req }));
   mountSso(app, services.authHost, services.db);
   mountExport(app, services, accessFor);
-  mountIcons(app, services.pages, dataDir, { iconLinks });
+  mountIcons(app, services.pages, dataDir, {
+    iconLinks,
+    discoveredUrl: async (id) => (await services.discovery.find(id))?.url ?? null,
+  });
 
   const hasWebBuild = dist !== undefined && existsSync(dist);
   if (hasWebBuild) {
