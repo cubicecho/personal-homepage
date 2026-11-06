@@ -1,6 +1,6 @@
 // Getters, not constants, so a test sees the current environment.
 import { createRequire } from 'node:module';
-import { HTTP_DEFAULTS, STORE_DEFAULTS } from './defaults.ts';
+import { HTTP_DEFAULTS, STORE_DEFAULTS, WIDGET_DEFAULTS } from './defaults.ts';
 
 const NODE_ENV_PRODUCTION = 'production';
 /** The TRUST_PROXY value that trusts no hop. */
@@ -44,6 +44,16 @@ export const isProduction = (): boolean => process.env.NODE_ENV === NODE_ENV_PRO
 export const dataDir = (): string => {
   const raw = (process.env.DATA_DIR ?? '').trim();
   return raw === '' ? STORE_DEFAULTS.dataDir : raw;
+};
+
+/**
+ * The Open-Meteo forecast endpoint weather widgets ask.
+ *
+ * @returns `WEATHER_API_URL`, for a self-hosted Open-Meteo, or `WIDGET_DEFAULTS.weatherApiUrl` when unset or blank.
+ */
+export const weatherApiUrl = (): string => {
+  const raw = (process.env.WEATHER_API_URL ?? '').trim();
+  return raw === '' ? WIDGET_DEFAULTS.weatherApiUrl : raw;
 };
 
 /**

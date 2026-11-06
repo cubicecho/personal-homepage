@@ -6,6 +6,8 @@ export const TYPE_DEFS = /* GraphQL */ `
     LINK
     "The URL framed inline on the page, at frameHeightPx."
     FRAME
+    "Data the server fetches and the page shows: values from an API, a feed, the weather."
+    WIDGET
   }
 
   "Where a link opens."
@@ -18,8 +20,106 @@ export const TYPE_DEFS = /* GraphQL */ `
     APP
   }
 
+  "What a widget shows."
+  enum WidgetType {
+    "Values picked out of a JSON API's answer."
+    API
+    "The latest entries of an RSS or Atom feed."
+    RSS
+    "The weather now and for the coming hours, from Open-Meteo."
+    WEATHER
+  }
+
+  "How an API widget's value is written out."
+  enum ValueFormat {
+    "As a number, with thousands grouped."
+    NUMBER
+    "As it comes."
+    TEXT
+    "A count of bytes, as KiB, MiB and so on."
+    BYTES
+    "A number that is already a percentage: 42 is 42%."
+    PERCENT
+    "A number of seconds, as hours, minutes and seconds."
+    DURATION
+    "An ISO 8601 date, or seconds or milliseconds since 1970."
+    DATE
+  }
+
+  "The request methods an API widget can use."
+  enum HttpMethod {
+    GET
+    POST
+  }
+
+  "The units a weather widget reports in."
+  enum WeatherUnits {
+    "°C and km/h."
+    METRIC
+    "°F and mph."
+    IMPERIAL
+  }
+
+  "A header an API widget sends. The value is as written: a secret reference stays a reference."
+  type WidgetHeader {
+    name: String!
+    value: String!
+  }
+
+  "One value an API widget shows."
+  type ApiField {
+    label: String!
+    "A JSONPath into the answer: $.totalRecords, $.records[0].title, $.records.length."
+    path: String!
+    format: ValueFormat!
+    "Mark the value when it is above this."
+    warnAbove: Float
+    "Mark the value when it is below this."
+    warnBelow: Float
+  }
+
   """
-  One thing on a page: a link tile or an inline frame.
+  What an API widget asks and shows. url, header values and body may hold secret references,
+  \${env:HOMEPAGE_NAME} or \${file:/run/secrets/name}, filled in by the server only when it fetches.
+  """
+  type ApiWidgetSettings {
+    url: String!
+    method: HttpMethod!
+    headers: [WidgetHeader!]!
+    body: String
+    fields: [ApiField!]!
+  }
+
+  "Which feed an RSS widget reads."
+  type RssWidgetSettings {
+    url: String!
+    "How many entries it shows."
+    limit: Int!
+    "Whether each entry shows a line of its summary."
+    showSummary: Boolean!
+  }
+
+  "Where a weather widget reports for."
+  type WeatherWidgetSettings {
+    latitude: Float!
+    longitude: Float!
+    units: WeatherUnits!
+  }
+
+  "A WIDGET item's widget. Only the settings for its type are set."
+  type Widget {
+    type: WidgetType!
+    "How long the server reuses an answer, in seconds."
+    cacheSeconds: Int!
+    "How often an open page asks again, in seconds. Null asks only when the page loads."
+    refreshSeconds: Int
+    api: ApiWidgetSettings
+    rss: RssWidgetSettings
+    weather: WeatherWidgetSettings
+  }
+
+  """
+  One thing on a page: a link tile, an inline frame, or a widget.
 
   icon is a reference: a built-in glyph name (film), di:<name> (dashboard-icons), sh:<name> (selfh.st icons),
   favicon (the site's own, fetched by the server), or an image URL. iconUrl is where the browser loads it from,
@@ -30,9 +130,9 @@ export const TYPE_DEFS = /* GraphQL */ `
     id: ID!
     kind: ItemKind!
     title: String!
-    "An absolute http or https URL."
-    url: String!
-    "Where a LINK opens. Null for a FRAME."
+    "An absolute http or https URL. Optional for a WIDGET, where it is what the title links to; null only there."
+    url: String
+    "Where a LINK opens. Null for the other kinds."
     opensIn: OpensIn
     icon: String
     "Where the browser loads the icon image from. Null for a built-in glyph or no icon."
@@ -44,6 +144,8 @@ export const TYPE_DEFS = /* GraphQL */ `
     checkEnabled: Boolean!
     "The URL checked instead of url, such as an internal health endpoint. Null checks url."
     checkUrl: String
+    "What a WIDGET shows. Null for the other kinds."
+    widget: Widget
   }
 
   "A group of items on a page, with an optional heading."
@@ -86,6 +188,104 @@ export const TYPE_DEFS = /* GraphQL */ `
     minFrameHeightPx: Int!
     maxFrameHeightPx: Int!
     defaultFrameHeightPx: Int!
+    maxWidgetFields: Int!
+    maxWidgetHeaders: Int!
+    maxRssEntries: Int!
+    minWidgetCacheSeconds: Int!
+    maxWidgetCacheSeconds: Int!
+    minWidgetRefreshSeconds: Int!
+    maxWidgetBodyLength: Int!
+  }
+
+  "One value an API widget shows, written out."
+  type ApiRow {
+    label: String!
+    value: String!
+    "Whether it is past one of its field's warning thresholds."
+    warn: Boolean!
+  }
+
+  "What an API widget shows."
+  type ApiWidgetResult {
+    rows: [ApiRow!]!
+  }
+
+  "One entry of a feed."
+  type RssEntry {
+    title: String!
+    "The entry's link. Only http(s) links are kept."
+    url: String
+    "The feed's title."
+    source: String
+    "When it was published, as an ISO 8601 time."
+    publishedAt: String
+    "A line of its summary, as plain text, when the widget shows summaries."
+    summary: String
+  }
+
+  "What an RSS widget shows."
+  type RssWidgetResult {
+    feedTitle: String
+    entries: [RssEntry!]!
+  }
+
+  "The weather now."
+  type WeatherNow {
+    temperature: Float!
+    apparentTemperature: Float
+    "The WMO weather code."
+    weatherCode: Int!
+    "The code in words."
+    description: String!
+    windSpeed: Float
+    isDay: Boolean!
+  }
+
+  "The weather in one coming hour."
+  type WeatherHour {
+    "The hour, in the place's own time, as YYYY-MM-DDTHH:MM."
+    time: String!
+    temperature: Float!
+    weatherCode: Int!
+    description: String!
+    "The chance of rain or snow, in percent."
+    precipitationChance: Float
+  }
+
+  "What a weather widget shows."
+  type WeatherWidgetResult {
+    "As Open-Meteo writes it: °C, °F."
+    temperatureUnit: String!
+    "As Open-Meteo writes it: km/h, mp/h."
+    windSpeedUnit: String!
+    now: WeatherNow!
+    "Today's highest temperature."
+    high: Float
+    "Today's lowest temperature."
+    low: Float
+    hours: [WeatherHour!]!
+  }
+
+  "Whatever a widget shows."
+  union WidgetResult = ApiWidgetResult | RssWidgetResult | WeatherWidgetResult
+
+  "A widget's latest answer. When the latest fetch failed, the last good result is served as stale, with the error."
+  type WidgetData {
+    "When the result was fetched, as an ISO 8601 time. Null when no fetch has worked yet."
+    fetchedAt: String
+    "Whether the result is an older one, served because the latest fetch failed."
+    stale: Boolean!
+    "Why the latest fetch failed, in a sentence. It never holds a secret's value."
+    error: String
+    result: WidgetResult
+  }
+
+  "A widget's test run from the editor. Nothing is kept."
+  type WidgetPreview {
+    result: WidgetResult
+    error: String
+    "For an API widget, the answer as indented JSON, cut short at a limit, to write paths against."
+    raw: String
   }
 
   "How an item's last check went."
@@ -167,6 +367,64 @@ export const TYPE_DEFS = /* GraphQL */ `
     iconSearch(query: String!, limit: Int): [IconOption!]!
     "The web searches the launcher offers."
     searchEngines: [SearchEngine!]!
+    "A widget item's latest data, from cache when fresh. NOT_FOUND when the page or item doesn't exist."
+    widgetData(pageSlug: ID!, itemId: ID!): WidgetData!
+    "Runs a widget that hasn't been saved, for the editor's test."
+    widgetPreview(input: WidgetInput!): WidgetPreview!
+  }
+
+  "A header for an API widget to send."
+  input WidgetHeaderInput {
+    name: String!
+    "May hold a secret reference."
+    value: String!
+  }
+
+  "One value for an API widget to show."
+  input ApiFieldInput {
+    label: String!
+    path: String!
+    "TEXT when left out."
+    format: ValueFormat
+    warnAbove: Float
+    warnBelow: Float
+  }
+
+  "What an API widget asks and shows."
+  input ApiWidgetSettingsInput {
+    url: String!
+    "GET when left out."
+    method: HttpMethod
+    headers: [WidgetHeaderInput!]
+    "Sent with a POST."
+    body: String
+    fields: [ApiFieldInput!]!
+  }
+
+  "Which feed an RSS widget reads."
+  input RssWidgetSettingsInput {
+    url: String!
+    limit: Int
+    showSummary: Boolean
+  }
+
+  "Where a weather widget reports for."
+  input WeatherWidgetSettingsInput {
+    latitude: Float!
+    longitude: Float!
+    "METRIC when left out."
+    units: WeatherUnits
+  }
+
+  "A widget: its type, its timing, and the settings for that type (the others are ignored)."
+  input WidgetInput {
+    type: WidgetType!
+    "The type's default when left out."
+    cacheSeconds: Int
+    refreshSeconds: Int
+    api: ApiWidgetSettingsInput
+    rss: RssWidgetSettingsInput
+    weather: WeatherWidgetSettingsInput
   }
 
   "A new page."
@@ -195,18 +453,20 @@ export const TYPE_DEFS = /* GraphQL */ `
   input ItemInput {
     kind: ItemKind!
     title: String!
-    "An absolute http or https URL."
-    url: String!
-    "LINK only; NEW_TAB when left out. Ignored for FRAME."
+    "An absolute http or https URL. Required for LINK and FRAME; optional for WIDGET."
+    url: String
+    "LINK only; NEW_TAB when left out. Ignored for the others."
     opensIn: OpensIn
     icon: String
     description: String
     "FRAME only, in CSS pixels; PageLimits.defaultFrameHeightPx when left out. Ignored for LINK."
     frameHeightPx: Int
-    "Defaults to true."
+    "Defaults to true, except for a WIDGET."
     checkEnabled: Boolean
     "Blank or left out to check url."
     checkUrl: String
+    "WIDGET only, and required there."
+    widget: WidgetInput
   }
 
   type Mutation {
