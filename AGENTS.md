@@ -20,12 +20,21 @@ npm run db:import-yaml -- --data-dir examples/data --replace   # sample pages (s
 
 ## Layout
 
-- `server/core/`: config getters (`DATA_DIR`, `DATABASE_URL`, `DB_CONNECT_TIMEOUT_MS`, `PORT`, `TRUST_PROXY`,
+- `server/core/`: config getters (`DATA_DIR`, `DATABASE_URL`, `DB_CONNECT_TIMEOUT_MS`, `PORT`, `TRUST_PROXY`, the sign-in
+  variables,
   `WEATHER_API_URL`), the `defaults.ts` groups (`PAGE_LIMIT_DEFAULTS` is also served as `Query.pageLimits`), coded
   errors and preflight.
+- `server/auth/`: sign-in and who may do what.
+  - `better-auth.ts` (`createAuth`), `auth-host.ts` (rebuilt when a provider is paired), `endpoints.ts`
+    (better-auth's endpoints as GraphQL), `resolvers.ts` (`access`, `authConfig`).
+  - `access.ts`: the viewer, `requireView`/`requireEdit`, and `visiblePages` for `visibleTo`.
+  - `forward-auth.ts`: trusted proxies and their `Remote-*` identities. `groups.ts`: the OIDC groups claim.
+  - `icon-links.ts`: signed favicon addresses. `rate-limit.ts`, `throttle.ts`, `admin.ts`.
+- `server/sso/`: pairing with a provider by setup URL (`pairing.ts`, RFC 7591/7592), where the provider comes from
+  (`settings.ts`), and `ssoSetup`/`pairSso`/`unpairSso` (`resolvers.ts`). `server/http/sso.ts` is the two OIDC legs.
 - `server/db/`:
   - `client.ts`: opens PGlite or Postgres, each with its own migrator and close.
-  - `schema.ts`: the tables. Migrations are generated into `drizzle/` and committed.
+  - `schema.ts`: the tables, pages and sign-in both. Migrations are generated into `drizzle/` and committed.
   - `lock.ts`: one server per PGlite folder.
   - `wait.ts`: retries the first Postgres connection.
   - `import-yaml.ts`: moves 1.x YAML pages in on first boot. `import-yaml-cli.ts` is `npm run db:import-yaml`.
@@ -56,6 +65,8 @@ npm run db:import-yaml -- --data-dir examples/data --replace   # sample pages (s
   - `web/src/frames/`
   - `web/src/export/`
   - `web/src/widgets/`: the card, its per-type views, `useWidgetData` and the editor.
+  - `web/src/auth/`: the stored session, `useAccess`/`useCanEdit`, the sign-in settings and account cards,
+    the open-instance notice, and the groups the Who can see it field suggests.
 - `tests/`: mirrors `server/`. `tests/db.ts` opens one in-memory PGlite per file with the real migrations.
 - `examples/data/`: sample pages in the 1.x YAML layout, for `db:import-yaml`.
 
@@ -73,5 +84,14 @@ npm run db:import-yaml -- --data-dir examples/data --replace   # sample pages (s
   - A new fetcher must take its strings through the same resolver.
   - `tests/widgets` and `tests/http/widgets.test.ts` hold this.
 - **Widgets fetch on view, never in the background.** No timers on the server.
-- **No sign-in.** Keep it on a trusted network (issue #1).
+- **Who may do what is decided once per request, in `server/auth/access.ts`.** Every mutation in
+  `graphql/schema.ts` goes through `editorsOnly`; every read of a page goes through `loadPage` or
+  `visiblePages`, which drop what the viewer's groups may not see. A new resolver, route or export that
+  reads pages must do the same: hidden things are absent, never FORBIDDEN, so their existence doesn't leak.
+- **An instance with no sign-in set up stays open** (`AuthMode.OPEN`): anyone may do anything. Never lock
+  an upgraded instance; say so in the UI instead.
+- **Remote-* headers are believed only from `FORWARD_AUTH_TRUSTED_PROXIES`**, checked against the socket's
+  address, never X-Forwarded-For (`auth/forward-auth.ts`).
+- **Sign-in follows the cubicecho_backend `sso.md` pattern:** better-auth on the database, its endpoints as
+  GraphQL, the two OIDC legs in `http/sso.ts`, the pairing in `sso/`, `AuthHost` rebuilt on (un)pairing.
 - **No Storybook stories yet.** The UI was checked with scripted headless runs.
