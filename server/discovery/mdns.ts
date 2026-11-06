@@ -11,6 +11,7 @@
 //
 // Multicast doesn't cross Docker's default bridge network: run the server with host networking for this to
 // find anything. Without it, the browser hears nothing, which is not an error.
+import { isIP } from 'node:net';
 import { Bonjour } from 'bonjour-service';
 import { DISCOVERY_DEFAULTS, type DiscoverySettings } from '../core/defaults.ts';
 import { errorMessage } from '../core/errors.ts';
@@ -62,8 +63,6 @@ export interface MdnsSourceOptions {
 
 /** The TXT keys never kept: a username and password some devices announce. */
 const SECRET_TXT_KEYS = new Set(['u', 'p']);
-/** The suffix of a name only mDNS resolves, which the server may not, inside a container. */
-const MDNS_SUFFIX = '.local';
 /** How specific each type is, for when one app announces several: the lowest wins. */
 const TYPE_RANK: Readonly<Record<string, number>> = Object.freeze({
   'home-assistant': 0,
@@ -144,16 +143,18 @@ function buildUrl(scheme: string, host: string, port: number, path: string): str
 }
 
 /**
- * Swaps a `.local` name in an address for the service's address, for the server's own requests.
+ * Swaps the host name in an address for the address the service announced, for the server's own requests.
+ * The announced address is where the service said it is; a name may not resolve from here (a `.local` name
+ * inside a container), or may resolve somewhere else (a bare host name, from /etc/hosts).
  *
  * @param url - The address people open.
- * @param address - The service's address, if known.
- * @returns The address to fetch, or null when the original can be fetched as it is.
+ * @param address - The address the service announced, if any.
+ * @returns The address to fetch, or null when the original names its host by address already, or none was announced.
  */
 function probeFor(url: string, address: string | null): string | null {
   const parsed = new URL(url);
-  const isMdnsName = parsed.hostname.endsWith(MDNS_SUFFIX);
-  if (isMdnsName === false || address === null) {
+  const isAlreadyAddress = isIP(parsed.hostname.replace(/^\[|\]$/g, '')) !== 0;
+  if (isAlreadyAddress || address === null) {
     return null;
   }
   parsed.hostname = address.includes(':') ? `[${address}]` : address;

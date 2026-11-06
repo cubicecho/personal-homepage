@@ -50,9 +50,11 @@ describe('mdnsCandidate', () => {
     expect(mdnsCandidate(service({ type: 'ipp', port: 631, txt: {} }))).toBeNull();
   });
 
-  it('leaves out the default port and keeps a name that is not .local as it is', () => {
+  it('leaves out the default port, and fetches at the address only when one was announced', () => {
     const candidate = mdnsCandidate(service({ type: 'https', host: 'nas.lan.', port: 443 }));
-    expect(candidate).toMatchObject({ url: 'https://nas.lan/', probeUrl: null });
+    expect(candidate).toMatchObject({ url: 'https://nas.lan/', probeUrl: 'https://192.168.1.20/' });
+    const unaddressed = mdnsCandidate(service({ type: 'https', host: 'nas.lan', port: 443, addresses: [] }));
+    expect(unaddressed).toMatchObject({ url: 'https://nas.lan/', probeUrl: null });
   });
 });
 
