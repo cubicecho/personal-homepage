@@ -10,6 +10,16 @@ export const TYPE_DEFS = /* GraphQL */ `
     WIDGET
   }
 
+  "How many columns of its section's grid an item spans. The web app clamps it to the columns there is room for."
+  enum ColumnSpan {
+    ONE
+    TWO
+    THREE
+    FOUR
+    "Every column, on a row of its own."
+    FULL
+  }
+
   "Where a link opens."
   enum OpensIn {
     "A new browser tab."
@@ -140,6 +150,8 @@ export const TYPE_DEFS = /* GraphQL */ `
     description: String
     "Height of the inline frame, in CSS pixels. Set for FRAME items only."
     frameHeightPx: Int
+    "How many grid columns it spans. Always ONE for a LINK."
+    columnSpan: ColumnSpan!
     "Whether the server checks this item's status."
     checkEnabled: Boolean!
     "The URL checked instead of url, such as an internal health endpoint. Null checks url."
@@ -475,6 +487,8 @@ export const TYPE_DEFS = /* GraphQL */ `
     description: String
     "FRAME only, in CSS pixels; PageLimits.defaultFrameHeightPx when left out. Ignored for LINK."
     frameHeightPx: Int
+    "FRAME and WIDGET only; FULL for a frame and TWO for a widget when left out. A LINK is always ONE."
+    columnSpan: ColumnSpan
     "Defaults to true, except for a WIDGET."
     checkEnabled: Boolean
     "Blank or left out to check url."

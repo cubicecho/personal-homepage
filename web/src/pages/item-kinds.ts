@@ -11,7 +11,7 @@ export const ITEM_KINDS = {
   FRAME: {
     Glyph: PanelsTopLeft,
     label: 'Frame',
-    summary: 'The address shown inline on the page, across its full width.',
+    summary: 'The address shown inline on the page, as wide as you choose.',
   },
   WIDGET: {
     Glyph: Gauge,

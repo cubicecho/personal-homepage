@@ -71,6 +71,8 @@ export const items = pgTable(
     description: text('description'),
     /** Set for a frame only. */
     frameHeightPx: integer('frame_height_px'),
+    /** How many grid columns the item spans: ONE to FOUR, or FULL. null (rows from before it) means the kind's default. */
+    columnSpan: text('column_span'),
     checkEnabled: boolean('check_enabled').notNull().default(true),
     checkUrl: text('check_url'),
     /**
@@ -96,6 +98,10 @@ export const items = pgTable(
     check('ck_items_url', sql`${table.url} is not null or ${table.kind} = 'WIDGET'`),
     check('ck_items_widget', sql`(${table.widget} is not null) = (${table.kind} = 'WIDGET')`),
     check('ck_items_opens_in', sql`${table.opensIn} is null or ${table.opensIn} in ('NEW_TAB', 'SAME_TAB', 'APP')`),
+    check(
+      'ck_items_column_span',
+      sql`${table.columnSpan} is null or ${table.columnSpan} in ('ONE', 'TWO', 'THREE', 'FOUR', 'FULL')`,
+    ),
   ],
 );
 

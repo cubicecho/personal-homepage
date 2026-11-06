@@ -18,7 +18,7 @@ interface WidgetCardProps {
 }
 
 /**
- * A widget item: its data, fetched by the server, in a card the width of the page. Its title links to
+ * A widget item: its data, fetched by the server, in a card as wide as its column span. Its title links to
  * the item's address when it has one. When the latest fetch failed, the last good data stays, marked
  * out of date, with what went wrong under it.
  */
@@ -49,7 +49,10 @@ export function WidgetCard({ page, item, menuSlot }: WidgetCardProps) {
   const fetchedAt = data?.fetchedAt ?? null;
   return (
     <CardLayout
+      className="h-full"
       title={title}
+      // As tall as the 28px controls beside it, so the title and they share a centre line.
+      titleClassName="leading-7"
       iconSlot={iconElement(item.icon, type.Glyph, item.iconUrl)}
       description={item.description ?? undefined}
       actionSlot={

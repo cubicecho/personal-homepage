@@ -1,0 +1,76 @@
+{
+  "type": "diff",
+  "version": "9",
+  "dialect": "postgres",
+  "id": "fc310758-eaaf-4f81-b486-5bbbb02231b5",
+  "prevIds": [
+    "5febc4be-307d-4879-9bc3-c9054a3cda58"
+  ],
+  "footprints": [
+    {
+      "statementType": "add_column",
+      "statementTarget": [
+        "column",
+        "public",
+        "items",
+        "column_span"
+      ],
+      "writes": [
+        "s|col|public.items.column_span",
+        "n|col|public.items.column_span",
+        "e|col|public.items.column_span"
+      ],
+      "reads": [
+        "n|tbl|public.items",
+        "n|sch|public"
+      ]
+    },
+    {
+      "statementType": "add_check",
+      "statementTarget": [
+        "table",
+        "public",
+        "items"
+      ],
+      "writes": [
+        "s|ck|public.items.ck_items_column_span",
+        "n|ck|public.items.ck_items_column_span",
+        "e|ck|public.items.ck_items_column_span",
+        "n|con|public.items.ck_items_column_span"
+      ],
+      "reads": [
+        "n|tbl|public.items",
+        "n|sch|public",
+        "n|col|public.items.column_span"
+      ]
+    }
+  ],
+  "deltas": [
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "items",
+        "name": "column_span",
+        "type": "text",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "items",
+        "name": "ck_items_column_span",
+        "value": "\"column_span\" is null or \"column_span\" in ('ONE', 'TWO', 'THREE', 'FOUR', 'FULL')",
+        "entityType": "checks"
+      }
+    }
+  ]
+}

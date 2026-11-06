@@ -2,7 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import type { Server } from 'node:http';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { type ItemFields, ItemKind, OpensIn } from '../server/pages/page.ts';
+import { DEFAULT_COLUMN_SPAN, type ItemFields, ItemKind, OpensIn } from '../server/pages/page.ts';
 
 /**
  * Makes an empty directory for one test file's data.
@@ -18,7 +18,7 @@ export async function makeDataDir(): Promise<{ dir: string; remove: () => Promis
  * Builds a link item's fields.
  *
  * @param title - The item's title.
- * @param [overrides] - Fields to replace.
+ * @param [overrides] - Fields to replace. The column span defaults to the overriding kind's.
  * @returns The fields.
  */
 export function linkFields(title: string, overrides: Partial<ItemFields> = {}): ItemFields {
@@ -30,6 +30,7 @@ export function linkFields(title: string, overrides: Partial<ItemFields> = {}): 
     icon: null,
     description: null,
     frameHeightPx: null,
+    columnSpan: DEFAULT_COLUMN_SPAN[overrides.kind ?? ItemKind.Link],
     check: { enabled: true, url: null },
     visibleTo: [],
     widget: null,
