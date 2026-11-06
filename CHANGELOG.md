@@ -1,3 +1,12 @@
+# [3.1.0](https://github.com/cubicecho/personal-homepage/compare/v3.0.1...v3.1.0) (2026-11-06)
+
+
+### Features
+
+* let frames and widgets span columns of their section's grid ([bf93d72](https://github.com/cubicecho/personal-homepage/commit/bf93d72f8e6e87b01f79e238889f507de49ff325))
+* **web:** give every card a title row with its status and a quiet menu ([44c34fd](https://github.com/cubicecho/personal-homepage/commit/44c34fd0674a8141b3f3b06e7494db23365396a5))
+* **web:** lay a section out as one grid, and choose how wide a frame or widget is ([316975f](https://github.com/cubicecho/personal-homepage/commit/316975f9ff4d02e3d505559ad8b040eea8d88778))
+
 ## [3.0.1](https://github.com/cubicecho/personal-homepage/compare/v3.0.0...v3.0.1) (2026-11-06)
 
 
