@@ -87,6 +87,13 @@ nothing is proxied.
 - **Use addresses that work from every device you'll open the homepage on.** `http://localhost:8096` means a
   different machine on your phone.
 
+## Export
+
+**Download as zip**, at the bottom of the sidebar, saves `site.yaml` and every `pages/*.yaml` as one zip
+(`GET /export.zip`, named `homepage-YYYY-MM-DD.zip`). The files keep their paths, so unzipping it into an empty data
+directory restores every page. Nothing else in the data directory is included. There is no versioning: a zip is a
+copy of the files as they are now.
+
 ## The API
 
 GraphQL at `/graphql`. In development, GraphiQL is served there too. `schema.graphql` is printed by `npm run codegen`
