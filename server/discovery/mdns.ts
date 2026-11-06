@@ -191,6 +191,9 @@ function serviceUrl(service: MdnsService, host: string): string | null {
   }
 }
 
+/** Service types any device may announce, which say nothing about which app it is. */
+const GENERIC_TYPES = new Set(['http', 'https', 'ipp', 'ipps']);
+
 /**
  * Turns an announced service into an app to suggest.
  *
@@ -215,6 +218,8 @@ export function mdnsCandidate(service: MdnsService): Candidate | null {
     url,
     probeUrl: probeFor(url, address),
     fallbackName: service.name,
+    // An app's own type names it: `_home-assistant._tcp` is Home Assistant, whatever the instance is called.
+    nameHints: GENERIC_TYPES.has(service.type) ? [] : [service.type],
     explicit: NO_EXPLICIT_DETAILS,
     metadata: { type: service.type, host, port: service.port, addresses: service.addresses ?? [], txt },
   };

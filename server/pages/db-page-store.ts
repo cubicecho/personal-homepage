@@ -421,6 +421,21 @@ export async function createDbPageStore(db: Database): Promise<PageStore> {
     updateItem: (slug, id, fields) => edit(slug, (page) => edits.updateItem(page, id, fields)),
     removeItem: (slug, id) => edit(slug, (page) => edits.removeItem(page, id)),
     moveItem: (slug, id, toSectionId, toIndex) => edit(slug, (page) => edits.moveItem(page, id, toSectionId, toIndex)),
+
+    moveItemToPage: (slug, id, toSlug, toSectionId, toIndex) =>
+      exclusive(db, async (tx) => {
+        const from = await loadPage(tx, slug);
+        if (toSlug === slug) {
+          // An index past the end is clamped to it, so no index means the end of the section.
+          const page = edits.moveItem(from, id, toSectionId, toIndex ?? Number.POSITIVE_INFINITY);
+          await writePage(tx, page);
+          return { from: page, to: page, itemId: id };
+        }
+        const moved = edits.transferItem(from, id, await loadPage(tx, toSlug), toSectionId, toIndex);
+        await writePage(tx, moved.from);
+        await writePage(tx, moved.to);
+        return moved;
+      }),
   };
 }
 

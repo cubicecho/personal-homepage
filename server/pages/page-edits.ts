@@ -227,3 +227,53 @@ export function moveItem(page: Page, id: string, toSectionId: string | null, toI
     return { ...section, items };
   });
 }
+
+/** Two pages after an item moved from one to the other, and the id it has now. */
+export interface ItemTransfer {
+  /** The page it left. */
+  from: Page;
+  /** The page it went to. */
+  to: Page;
+  /** Its id on the page it went to: the same, unless that page already had an item with that id. */
+  itemId: string;
+}
+
+/**
+ * Moves an item to another page, keeping everything about it. It is the item itself that moves, spread
+ * whole, so a field added to items later travels with it without this rule changing.
+ *
+ * @param from - The page it is on.
+ * @param id - The item's id.
+ * @param to - The page it goes to. Not the same page: that is `moveItem`.
+ * @param toSectionId - The section it goes to, or null for that page's first.
+ * @param toIndex - Where it goes in that section, clamped to it; null for the end.
+ * @returns Both pages, and the item's id on the page it went to.
+ * @throws NOT_FOUND when the item or the section is not there; BAD_USER_INPUT when the page it goes to
+ * holds as many items as it may.
+ */
+export function transferItem(
+  from: Page,
+  id: string,
+  to: Page,
+  toSectionId: string | null,
+  toIndex: number | null,
+): ItemTransfer {
+  const { sectionIndex, itemIndex } = locateItem(from, id);
+  const moving = from.sections[sectionIndex]?.items[itemIndex];
+  if (moving === undefined) {
+    throw notFound(`The page "${from.slug}" has no item "${id}".`);
+  }
+  const targetItems = itemsOf(to);
+  if (targetItems.length >= maxItemsPerPage) {
+    throw badInput(`"${to.title}" already has ${maxItemsPerPage} items, the most a page can hold.`);
+  }
+  const targetIndex = toSectionId === null ? 0 : locateSection(to, toSectionId);
+  const itemId = uniqueSlug(moving.id, new Set(targetItems.map((item) => item.id)));
+  const arrived = withSection(to, targetIndex, (section) => {
+    const at = clampIndex(toIndex ?? section.items.length, 0, section.items.length);
+    const sectionItems = [...section.items];
+    sectionItems.splice(at, 0, { ...moving, id: itemId });
+    return { ...section, items: sectionItems };
+  });
+  return { from: removeItem(from, id), to: arrived, itemId };
+}

@@ -1,4 +1,5 @@
 import type { OpenedDatabase } from '../../server/db/client.ts';
+import { discoveredApps } from '../../server/db/schema.ts';
 import { type Candidate, type DiscoverySource, DiscoverySourceName } from '../../server/discovery/candidate.ts';
 import type { Describer, Description } from '../../server/discovery/describe.ts';
 import { createDiscoveryService } from '../../server/discovery/service.ts';
@@ -33,6 +34,7 @@ function candidate(key: string, overrides: Partial<Candidate> = {}): Candidate {
     url: `http://nas.lan/${key}`,
     probeUrl: null,
     fallbackName: key,
+    nameHints: [],
     explicit: { name: null, description: null, icon: null },
     metadata: {},
     ...overrides,
@@ -55,6 +57,7 @@ function fakeDescriber(pages: Record<string, Partial<Description>>): Describer {
     describe: vi.fn(async (url: string) => ({
       url,
       title: null,
+      names: [],
       description: null,
       icon: null,
       problem: null,
@@ -142,6 +145,69 @@ describe('the discovery service', () => {
       isEnabled: false,
       setupHint: 'Turn it on.',
     });
+  });
+
+  it('picks an icon: a label first, then a catalogue icon a name matches, then the page’s, then favicon', async () => {
+    const describer = fakeDescriber({
+      'http://nas.lan/labelled': { names: ['Jellyfin'], icon: 'http://nas.lan/a.png' },
+      'http://nas.lan/budget': { names: ['Actual Budget'], icon: 'http://nas.lan/b.png' },
+      'http://nas.lan/budget-container': { names: [], icon: 'favicon' },
+      'http://nas.lan/own-icon': { names: ['Something Mine'], icon: 'http://nas.lan/c.png' },
+      'http://nas.lan/plain': { names: [], icon: 'favicon' },
+    });
+    const asked: string[][] = [];
+    const matchIcon = async (names: readonly string[]) => {
+      asked.push([...names]);
+      const known: Record<string, string> = { jellyfin: 'di:jellyfin', 'actual budget': 'di:actual-budget' };
+      const hit = names.map((name) => known[name.toLowerCase()]).find((icon) => icon !== undefined);
+      return hit ?? null;
+    };
+    const service = createDiscoveryService({
+      store: createDiscoveryStore(database.db),
+      describer,
+      matchIcon,
+      sources: [
+        fakeSource(() => [
+          candidate('labelled', { explicit: { name: null, description: null, icon: 'sh:jellyfin' } }),
+          candidate('budget'),
+          candidate('budget-container', { nameHints: ['budget', 'actual budget'] }),
+          candidate('own-icon'),
+          candidate('plain'),
+        ]),
+      ],
+    });
+    await service.rescan();
+    const rows = await database.db.select().from(discoveredApps);
+    const byKey = new Map(rows.map((row) => [row.sourceKey.split(':').at(-1), row]));
+    const iconOf = (key: string) => {
+      const row = byKey.get(key);
+      const metadata = (row?.metadata ?? {}) as Record<string, unknown>;
+      return [row?.icon, metadata.iconSource];
+    };
+    expect(iconOf('labelled')).toEqual(['sh:jellyfin', 'label']);
+    expect(iconOf('budget')).toEqual(['di:actual-budget', 'catalogue']);
+    expect(iconOf('budget-container')).toEqual(['di:actual-budget', 'catalogue']);
+    expect(iconOf('own-icon')).toEqual(['http://nas.lan/c.png', 'page']);
+    expect(iconOf('plain')).toEqual(['favicon', 'favicon']);
+    // A label's icon wins without asking the catalogues; the others are asked with every name, page names first.
+    expect(asked).toContainEqual(['Actual Budget', 'budget']);
+    expect(asked).toContainEqual(['budget-container', 'budget', 'actual budget']);
+    expect(asked.some((names) => names.includes('labelled'))).toBe(false);
+  });
+
+  it('fills in a typed address with a catalogue icon its name matches, else the page’s', async () => {
+    const describer = fakeDescriber({
+      'https://budget.lan/': { title: 'Actual', names: ['Actual Budget'], icon: 'https://budget.lan/icon.png' },
+      'https://other.lan/': { title: 'Other', names: ['Other'], icon: 'https://other.lan/icon.png' },
+    });
+    const service = createDiscoveryService({
+      store: createDiscoveryStore(database.db),
+      describer,
+      sources: [],
+      matchIcon: async (names) => (names.includes('Actual Budget') ? 'di:actual-budget' : null),
+    });
+    expect((await service.describe('https://budget.lan/')).icon).toBe('di:actual-budget');
+    expect((await service.describe('https://other.lan/')).icon).toBe('https://other.lan/icon.png');
   });
 
   it('describes what someone typed without requiring a private address', async () => {

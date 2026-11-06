@@ -169,4 +169,28 @@ describe('an instance with sign-in set up', () => {
     const forged = await fetch(`${signedIn.base}${signed.replace(/sig=[\w-]+/, 'sig=forged')}`);
     expect(forged.status).toBe(404);
   });
+
+  it('lets an editor move an item to another page, and nobody else', async () => {
+    const signedIn = await startSignedIn();
+    const admin = asProxyUser('admin');
+    await signedIn.gql(ACCESS, {}, admin);
+    await signedIn.gql(ADD_PAGE, { input: { title: 'Media' } }, admin);
+    await signedIn.gql(
+      ADD_ITEM,
+      { page: 'home', input: { kind: 'LINK', title: 'Plex', url: 'http://plex.lan' } },
+      admin,
+    );
+    const MOVE =
+      'mutation { moveItemToPage(pageSlug: "home", id: "plex", toPageSlug: "media") { itemId from { slug items { id } } to { slug items { id url } } } }';
+
+    expect(codeOf(await signedIn.gql(MOVE, {}, asProxyUser('guest')))).toBe(ErrorCode.Forbidden);
+
+    const { data, errors } = await signedIn.gql(MOVE, {}, admin);
+    expect(errors).toBeUndefined();
+    expect(data.moveItemToPage).toEqual({
+      itemId: 'plex',
+      from: { slug: 'home', items: [] },
+      to: { slug: 'media', items: [{ id: 'plex', url: 'http://plex.lan' }] },
+    });
+  });
 });
