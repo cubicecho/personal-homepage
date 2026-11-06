@@ -23,6 +23,7 @@ import {
   UpdateSectionDocument,
 } from '@/__generated__/graphql';
 import { request } from '@/core/gql';
+import { DISCOVERED_KEY } from '@/discovery/keys';
 
 /** A page as the app holds it. */
 export type Page = PageFieldsFragment;
@@ -71,6 +72,8 @@ function writePage(client: QueryClient, page: Page): void {
     }
     return [...pages, page];
   });
+  // An item added from, or unlinked from, a discovered app changes where that app says it is.
+  void client.invalidateQueries({ queryKey: DISCOVERED_KEY });
 }
 
 /**

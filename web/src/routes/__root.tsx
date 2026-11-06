@@ -190,7 +190,7 @@ function RootRoute() {
     // Who is asking decides what there is to draw, so nothing is drawn until the server has said.
     return <CenteredLayout title="Homepage" loading contentSlot={null} />;
   }
-  return <Shell isSettings={pathname === SETTINGS_PATH} />;
+  return <Shell isSettings={pathname.startsWith(SETTINGS_PATH)} />;
 }
 
 /**
