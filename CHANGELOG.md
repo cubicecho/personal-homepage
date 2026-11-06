@@ -1,3 +1,17 @@
+# [2.1.0](https://github.com/cubicecho/personal-homepage/compare/v2.0.0...v2.1.0) (2026-11-06)
+
+
+### Bug Fixes
+
+* sign in provider users who have no email address ([f34142a](https://github.com/cubicecho/personal-homepage/commit/f34142a19461638a43b1f752b8a03eb92389dc1c))
+
+
+### Features
+
+* make and keep a sign-in secret when BETTER_AUTH_SECRET is unset ([0a5dfe0](https://github.com/cubicecho/personal-homepage/commit/0a5dfe010f118e6a3451360f75aa8db5ded07e79))
+* sign in through heautou, by OIDC pairing or forward auth, and limit what each group sees ([a62a6e0](https://github.com/cubicecho/personal-homepage/commit/a62a6e0e42b3ed2311285f2d5cd5848f8ad2d4f1))
+* **web:** sign in with heautou, set sign-in up from settings, and choose who can see each thing ([d6fe37e](https://github.com/cubicecho/personal-homepage/commit/d6fe37e4105635c27ecc404397843769cadf5d70))
+
 # [2.0.0](https://github.com/cubicecho/personal-homepage/compare/v1.3.0...v2.0.0) (2026-11-06)
 
 
