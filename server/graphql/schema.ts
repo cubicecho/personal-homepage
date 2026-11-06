@@ -460,6 +460,20 @@ const resolvers = {
       args: OnPageArgs & MoveArgs & { toSectionId?: string | null },
       ctx: Context,
     ): Promise<Page> => ctx.pages.moveItem(args.pageSlug, args.id, args.toSectionId ?? null, args.toIndex),
+    /**
+     * Resolves `Mutation.moveItemToPage`.
+     *
+     * @param _parent - Unused.
+     * @param args - The item, the page and section it goes to, and where.
+     * @param ctx - Request context.
+     * @returns Both pages, and the item's id where it landed.
+     */
+    moveItemToPage: (
+      _parent: unknown,
+      args: OnPageArgs & { toPageSlug: string; toSectionId?: string | null; toIndex?: number | null },
+      ctx: Context,
+    ): Promise<{ from: Page; to: Page; itemId: string }> =>
+      ctx.pages.moveItemToPage(args.pageSlug, args.id, args.toPageSlug, args.toSectionId ?? null, args.toIndex ?? null),
   }),
 };
 
