@@ -97,6 +97,8 @@ export interface Item {
   widget: Widget | null;
   /** The groups that may see it. Empty means everyone who may see the homepage. */
   visibleTo: string[];
+  /** The discovered app it was added from, or null. Only a link: the item is edited like any other. */
+  discoveredId: string | null;
 }
 
 /** A group of items on a page, with an optional heading. */
@@ -165,6 +167,8 @@ export interface ItemFields {
   widget: Widget | null;
   /** The groups that may see it. Empty means everyone who may see the homepage. */
   visibleTo: string[];
+  /** The discovered app it comes from, or null. Replaced like every other field: leaving it out unlinks it. */
+  discoveredId: string | null;
 }
 
 /**

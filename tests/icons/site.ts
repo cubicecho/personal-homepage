@@ -13,6 +13,8 @@ export const SVG_TEXT = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 
 export interface Route {
   status?: number;
   type?: string;
+  /** More headers, such as a redirect's Location. */
+  headers?: Record<string, string>;
   body: string | Uint8Array;
 }
 
@@ -43,7 +45,7 @@ export async function startSite(): Promise<TestSite> {
       res.writeHead(404, { 'content-type': 'text/plain' }).end('not found');
       return;
     }
-    const headers: Record<string, string> = {};
+    const headers: Record<string, string> = { ...route.headers };
     if (route.type !== undefined) {
       headers['content-type'] = route.type;
     }

@@ -80,6 +80,8 @@ export const items = pgTable(
     widget: jsonb('widget').$type<Record<string, unknown>>(),
     /** The groups that may see the item. Empty means everyone who may see its section. */
     visibleTo: text('visible_to').array().notNull().default(sql`'{}'::text[]`),
+    /** The discovered app it was added from, kept so the Discovered apps page can say where it is. */
+    discoveredId: text('discovered_id').references(() => discoveredApps.id, { onDelete: 'set null' }),
     position: integer('position').notNull(),
   },
   (table) => [
@@ -112,6 +114,34 @@ export const siteSettings = pgTable(
   (table) => [check('ck_site_settings_singleton', sql`${table.id} = 'site'`)],
 );
 
+/**
+ * An app the server found on the network: one row per thing a source reported, kept after it stops
+ * being seen so its last sighting can be shown. Nothing here is on a page until someone adds it.
+ */
+export const discoveredApps = pgTable(
+  'discovered_apps',
+  {
+    id: text('id').primaryKey(),
+    /** Which source found it: MDNS, DOCKHAND or DOCKER. */
+    source: text('source').notNull(),
+    /** What the source calls it, stable across sightings: the mDNS instance, or the host and container name. */
+    sourceKey: text('source_key').notNull().unique('uq_discovered_apps_source_key'),
+    name: text('name').notNull(),
+    url: text('url').notNull(),
+    description: text('description'),
+    /** An icon reference, as items take: an image URL, a catalogue icon, or `favicon`. */
+    icon: text('icon'),
+    firstSeenAt: timestamp('first_seen_at', { withTimezone: true }).notNull().defaultNow(),
+    lastSeenAt: timestamp('last_seen_at', { withTimezone: true }).notNull().defaultNow(),
+    dismissed: boolean('dismissed').notNull().default(false),
+    /** What the source and the description said, for working out why an app looks the way it does. */
+    metadata: jsonb('metadata').$type<Record<string, unknown>>(),
+  },
+  (table) => [check('ck_discovered_apps_source', sql`${table.source} in ('MDNS', 'DOCKHAND', 'DOCKER')`)],
+);
+
+/** A discovered app row as read. */
+export type DiscoveredAppRow = typeof discoveredApps.$inferSelect;
 /** A page row as read. */
 export type PageRow = typeof pages.$inferSelect;
 /** A section row as read. */

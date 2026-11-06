@@ -53,8 +53,15 @@ npm run db:import-yaml -- --data-dir examples/data --replace   # sample pages (s
   - `widget-service.ts`: the cache (per page, item and settings hash), shared in-flight fetches and stale-on-error.
   - `api.ts`, `rss.ts`, `weather.ts`: the fetchers.
   - `secrets.ts`: fills in `${env:HOMEPAGE_*}` / `${file:…}` and scrubs them back out of everything a fetch returns.
-- `server/graphql/`: the SDL (`type-defs.ts`), resolvers (`schema.ts`), operation limits and the logger.
-  `write-schema.ts` prints `schema.graphql`.
+- `server/discovery/`: finding apps on the network to suggest.
+  - `candidate.ts`: what a source reports, and the `DiscoverySource` contract.
+  - `mdns.ts`, `dockhand.ts`, `docker-socket.ts`: the sources; `container-apps.ts` maps a container (and its
+    Homepage labels) to an app for both container sources.
+  - `describe.ts`: an address's page and web manifest → name, description, icon. Also "Fill in".
+  - `store.ts`: the `discovered_apps` rows. `service.ts`: scans, describes and records, one scan at a time.
+  - `setup.ts`: which sources the environment sets up.
+- `server/graphql/`: the SDL (`type-defs.ts`), resolvers (`schema.ts`), the discovery part (`discovery.ts`),
+  operation limits and the logger. `write-schema.ts` prints `schema.graphql`.
 - `server/http/`: `createApp(deps)`, health and shutdown. `server/index.ts` only boots.
 - `web/src/components/`: vendored cubeui and shadcn code. Don't edit it; reinstall with
   `npx shadcn@latest add @cubeui/<item>`.
@@ -68,6 +75,8 @@ npm run db:import-yaml -- --data-dir examples/data --replace   # sample pages (s
   - `web/src/widgets/`: the card, its per-type views, `useWidgetData` and the editor.
   - `web/src/auth/`: the stored session, `useAccess`/`useCanEdit`, the sign-in settings and account cards,
     the open-instance notice, and the groups the Who can see it field suggests.
+  - `web/src/discovery/`: Settings' Discovered apps section, the add-to-page dialog, and the item dialog's
+    Discovered app / Enter manually choice, Fill in button and linked-app note.
 - `tests/`: mirrors `server/`. `tests/db.ts` opens one in-memory PGlite per file with the real migrations.
 - `examples/data/`: sample pages in the 1.x YAML layout, for `db:import-yaml`.
 
@@ -84,7 +93,13 @@ npm run db:import-yaml -- --data-dir examples/data --replace   # sample pages (s
     JSON, errors) passes through its `redact`.
   - A new fetcher must take its strings through the same resolver.
   - `tests/widgets` and `tests/http/widgets.test.ts` hold this.
-- **Widgets fetch on view, never in the background.** No timers on the server.
+- **Widgets fetch on view, never in the background.** Discovery is the one thing that runs on a timer
+  (`DISCOVERY_DEFAULTS.pollMinutes`), started after listen and stopped first on shutdown.
+- **Discovered apps are suggestions.** Nothing found is ever put on a page by the server. An address that came
+  from the network is only fetched when it resolves to a private address (`describe.ts`). Every discovery field
+  is editors-only (`requireEdit`), since the list maps the network. A discovered app's server-fetched favicon
+  is served at `/icons/discovered/<id>` behind the same signed links as an item's.
+- **`Item.discoveredId` is replaced like every other field**: an `ItemInput` without it unlinks the item.
 - **Who may do what is decided once per request, in `server/auth/access.ts`.** Every mutation in
   `graphql/schema.ts` goes through `editorsOnly`; every read of a page goes through `loadPage` or
   `visiblePages`, which drop what the viewer's groups may not see. A new resolver, route or export that

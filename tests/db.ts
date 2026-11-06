@@ -48,6 +48,6 @@ export async function databaseDeps(db: Database): Promise<DatabaseDeps> {
  */
 export async function resetTestDatabase(db: Database): Promise<void> {
   await db.execute(
-    sql`truncate table pages, sections, items, site_settings, users, sessions, accounts, verifications, oidc_settings cascade`,
+    sql`truncate table pages, sections, items, site_settings, users, sessions, accounts, verifications, oidc_settings, discovered_apps cascade`,
   );
 }

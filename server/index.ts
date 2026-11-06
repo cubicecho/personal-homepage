@@ -17,6 +17,7 @@ import { errorMessage } from './core/errors.ts';
 import { openDatabase } from './db/client.ts';
 import { importYamlOnBoot } from './db/import-yaml.ts';
 import { waitForDatabase } from './db/wait.ts';
+import { createConfiguredDiscovery } from './discovery/setup.ts';
 import { createApp, WEB_DIST } from './http/app.ts';
 import { stopOnSignals } from './http/shutdown.ts';
 import { createDbPageStore } from './pages/db-page-store.ts';
@@ -89,12 +90,14 @@ const site = createSiteSettings(db);
 // Built after migrate: it reads the OIDC pairing from the database.
 const secret = resolveAuthSecret(dataDir());
 const authHost = await createAuthHost(db, { secret });
+const discovery = createConfiguredDiscovery(db);
 
 const server = createApp({
   pages,
   site,
   db,
   authHost,
+  discovery,
   authSecret: secret,
   dataDir: dataDir(),
   dist: WEB_DIST,
@@ -102,5 +105,7 @@ const server = createApp({
 }).listen(port(), LISTEN_HOST, () => {
   console.log(`[boot] personal-homepage ${version()} on http://localhost:${port()}, pages in ${database.location}`);
   logSignIn(authHost);
+  // After listen: discovery fetches pages and writes to the database in the background.
+  discovery.start();
 });
-stopOnSignals(server, { after: () => database.close() });
+stopOnSignals(server, { before: () => discovery.stop(), after: () => database.close() });

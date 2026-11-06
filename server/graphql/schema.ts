@@ -24,6 +24,7 @@ import type { SearchEngine } from '../site/site-settings.ts';
 import { applySsoExtension } from '../sso/resolvers.ts';
 import type { ItemStatus } from '../status/status-checker.ts';
 import type { WidgetData, WidgetPreview, WidgetResult } from '../widgets/widget-result.ts';
+import { checkDiscoveredLink, DISCOVERY_TYPE_DEFS, discoveryResolvers } from './discovery.ts';
 import { TYPE_DEFS } from './type-defs.ts';
 
 /** The GraphQL type of each widget type's result. */
@@ -414,11 +415,15 @@ const resolvers = {
      * @param ctx - Request context.
      * @returns The page, with the item.
      */
-    addItem: (
+    addItem: async (
       _parent: unknown,
       args: { pageSlug: string; sectionId?: string | null } & InputArgs,
       ctx: Context,
-    ): Promise<Page> => ctx.pages.addItem(args.pageSlug, args.sectionId ?? null, parseItemFields(args.input)),
+    ): Promise<Page> => {
+      const fields = parseItemFields(args.input);
+      await checkDiscoveredLink(ctx, fields.discoveredId);
+      return ctx.pages.addItem(args.pageSlug, args.sectionId ?? null, fields);
+    },
     /**
      * Resolves `Mutation.updateItem`.
      *
@@ -427,8 +432,11 @@ const resolvers = {
      * @param ctx - Request context.
      * @returns The page.
      */
-    updateItem: (_parent: unknown, args: OnPageArgs & InputArgs, ctx: Context): Promise<Page> =>
-      ctx.pages.updateItem(args.pageSlug, args.id, parseItemFields(args.input)),
+    updateItem: async (_parent: unknown, args: OnPageArgs & InputArgs, ctx: Context): Promise<Page> => {
+      const fields = parseItemFields(args.input);
+      await checkDiscoveredLink(ctx, fields.discoveredId);
+      return ctx.pages.updateItem(args.pageSlug, args.id, fields);
+    },
     /**
      * Resolves `Mutation.removeItem`.
      *
@@ -463,6 +471,9 @@ const resolvers = {
  * @returns The schema.
  */
 export function buildSchema(db: Database): GraphQLSchema {
-  const pagesSchema = createSchema<Context>({ typeDefs: TYPE_DEFS, resolvers });
+  const pagesSchema = createSchema<Context>({
+    typeDefs: [TYPE_DEFS, DISCOVERY_TYPE_DEFS],
+    resolvers: [resolvers, discoveryResolvers],
+  });
   return applySsoExtension(applyAuthExtension(applyBetterAuthExtension(pagesSchema, db)));
 }
