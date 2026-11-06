@@ -1,3 +1,10 @@
+## [3.0.1](https://github.com/cubicecho/personal-homepage/compare/v3.0.0...v3.0.1) (2026-11-06)
+
+
+### Bug Fixes
+
+* **web:** take cubeui's overlay fixes and drop the app's own frame guard ([a03c7a9](https://github.com/cubicecho/personal-homepage/commit/a03c7a999948b618646f25aac5a08241cb42b609)), closes [cubeui#402](https://github.com/cubeui/issues/402)
+
 # [3.0.0](https://github.com/cubicecho/personal-homepage/compare/v2.2.2...v3.0.0) (2026-11-06)
 
 
