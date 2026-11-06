@@ -1,8 +1,8 @@
 import type { Server } from 'node:http';
 import { ErrorCode } from '../../server/core/errors.ts';
 import { createApp } from '../../server/http/app.ts';
-import { createYamlPageStore } from '../../server/pages/yaml-page-store.ts';
 import { createWidgetService } from '../../server/widgets/widget-service.ts';
+import { databaseDeps, openTestDatabase } from '../db.ts';
 import { makeDataDir, portOf } from '../helpers.ts';
 import { json, startSource, type TestSource } from '../widgets/server.ts';
 
@@ -43,10 +43,13 @@ describe('widgets over GraphQL', () => {
       ),
     );
     const data = await makeDataDir();
-    remove = data.remove;
-    const pages = await createYamlPageStore({ dataDir: data.dir });
+    const database = await openTestDatabase();
+    remove = async () => {
+      await database.close();
+      await data.remove();
+    };
     const widgets = createWidgetService({}, { dataDir: data.dir, env: { HOMEPAGE_TOKEN: SECRET } });
-    server = createApp({ pages, widgets, dataDir: data.dir }).listen(0);
+    server = createApp({ ...(await databaseDeps(database.db)), widgets, dataDir: data.dir }).listen(0);
     await new Promise<void>((resolve) => server.once('listening', resolve));
     base = `http://127.0.0.1:${portOf(server)}`;
   });

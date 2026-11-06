@@ -17,13 +17,14 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 
-# The server isn't compiled. Its sources are the build output.
+# The server isn't compiled. Its sources are the build output. Migrations run on boot.
 COPY server server
+COPY drizzle drizzle
 COPY --from=builder /app/dist dist
 
 ENV NODE_ENV=production
 ENV PORT=3000
-# The page files. Created and owned by node before VOLUME, so a new named volume is writable.
+# The built-in database and caches. Created and owned by node before VOLUME, so a new named volume is writable.
 ENV DATA_DIR=/data
 RUN mkdir -p /data && chown node:node /data
 VOLUME /data

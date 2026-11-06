@@ -22,6 +22,46 @@ jobs:
       - name: Test
         run: npm test
 
+  postgres:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env: { POSTGRES_USER: ci, POSTGRES_PASSWORD: ci, POSTGRES_DB: ci }
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U ci -d ci"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgres://ci:ci@127.0.0.1:5432/ci
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with: { node-version: 26, cache: npm }
+      - run: npm ci
+      - name: Migrations apply
+        run: npm run db:migrate
+      # drizzle-kit writes nothing when the models and migrations agree.
+      - name: Migrations match the models
+        run: |
+          npm run db:generate
+          if [ -n "$(git status --porcelain drizzle)" ]; then
+            git status --porcelain drizzle
+            echo "::error::server/db/schema.ts changed without a migration. Run npm run db:generate and commit drizzle/."
+            exit 1
+          fi
+      # The server itself on Postgres: boots, migrates (already applied), imports the sample pages, serves them.
+      - name: The server runs on Postgres
+        run: |
+          npm run db:import-yaml -- --data-dir examples/data --replace
+          PORT=3010 node server/index.ts > server.log 2>&1 &
+          for attempt in $(seq 30); do curl -fsS http://127.0.0.1:3010/healthz && break; sleep 1; done
+          curl -fsS -H 'content-type: application/json' \
+            -d '{"query":"{ pages { slug } }"}' http://127.0.0.1:3010/graphql | grep -q '"slug":"tools"'
+      - name: Server log
+        if: failure()
+        run: cat server.log
+
   boot:
     runs-on: ubuntu-latest
     steps:

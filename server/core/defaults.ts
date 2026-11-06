@@ -39,11 +39,36 @@ export const OPERATION_LIMIT_DEFAULTS: Readonly<OperationLimitSettings> = Object
   defaultFieldCost: 1,
 });
 
-/** Where the YAML store keeps its files. */
+/** Where the server keeps what it writes. */
 export interface StoreSettings {
-  /** Directory holding `site.yaml` and `pages/`. `DATA_DIR` overrides it. Relative paths are from the working directory. */
+  /**
+   * Directory holding the built-in database (`pg/`) and the icon caches. `DATA_DIR` overrides it. Relative paths
+   * are from the working directory. Pages a 1.x release kept here as YAML are imported from it on first boot.
+   */
   dataDir: string;
 }
+
+/** How the server reaches its database (server/db/). */
+export interface DatabaseSettings {
+  /** How long boot waits for Postgres before giving up, in milliseconds. `DB_CONNECT_TIMEOUT_MS` overrides it. */
+  connectTimeoutMs: number;
+  /** The wait before the first retry, in milliseconds. */
+  firstRetryDelayMs: number;
+  /** The longest wait between two retries, in milliseconds. */
+  maxRetryDelayMs: number;
+  /** How much the wait grows after each failed attempt. */
+  retryBackoffFactor: number;
+  /** The folder under DATA_DIR where the built-in database (PGlite) keeps its files. */
+  pgliteDirName: string;
+}
+
+export const DATABASE_DEFAULTS: Readonly<DatabaseSettings> = Object.freeze({
+  connectTimeoutMs: 60_000,
+  firstRetryDelayMs: 500,
+  maxRetryDelayMs: 5_000,
+  retryBackoffFactor: 2,
+  pgliteDirName: 'pg',
+});
 
 export const STORE_DEFAULTS: Readonly<StoreSettings> = Object.freeze({
   dataDir: 'data',

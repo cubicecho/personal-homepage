@@ -2,14 +2,38 @@ import type { Server } from 'node:http';
 import { PAGE_LIMIT_DEFAULTS } from '../../server/core/defaults.ts';
 import { ErrorCode } from '../../server/core/errors.ts';
 import { HttpStatus } from '../../server/core/wire.ts';
+import type { OpenedDatabase } from '../../server/db/client.ts';
 import { createApp } from '../../server/http/app.ts';
-import { createYamlPageStore } from '../../server/pages/yaml-page-store.ts';
+import { databaseDeps, openTestDatabase } from '../db.ts';
 import { makeDataDir, portOf } from '../helpers.ts';
 
 /** Past `HTTP_DEFAULTS.bodyLimit`, which is 1 MB. */
 const OVERSIZED_PADDING_BYTES = 1_100_000;
+const SEARX = { prefix: 's', name: 'SearXNG', url: 'http://searx.local/search?q={query}' };
+
+/**
+ * Starts a server and waits until it listens.
+ *
+ * @param server - The server, just told to listen.
+ * @returns Its base URL.
+ */
+async function listening(server: Server): Promise<string> {
+  await new Promise<void>((resolve) => server.once('listening', resolve));
+  return `http://127.0.0.1:${portOf(server)}`;
+}
+
+/**
+ * Stops a server.
+ *
+ * @param server - The server.
+ */
+async function stop(server: Server): Promise<void> {
+  server.closeAllConnections();
+  await new Promise<void>((resolve) => server.close(() => resolve()));
+}
 
 describe('app', () => {
+  let database: OpenedDatabase;
   let server: Server;
   let base: string;
   let remove: () => Promise<void>;
@@ -17,15 +41,14 @@ describe('app', () => {
   beforeAll(async () => {
     const data = await makeDataDir();
     remove = data.remove;
-    const pages = await createYamlPageStore({ dataDir: data.dir });
-    server = createApp({ pages, dataDir: data.dir }).listen(0);
-    await new Promise<void>((resolve) => server.once('listening', resolve));
-    base = `http://127.0.0.1:${portOf(server)}`;
+    database = await openTestDatabase();
+    server = createApp({ ...(await databaseDeps(database.db)), dataDir: data.dir }).listen(0);
+    base = await listening(server);
   });
 
   afterAll(async () => {
-    server.closeAllConnections();
-    await new Promise<void>((resolve) => server.close(() => resolve()));
+    await stop(server);
+    await database.close();
     await remove();
   });
 
@@ -81,9 +104,19 @@ describe('app', () => {
     ]);
   });
 
-  it('serves the default search engines', async () => {
+  it('serves the default search engines, and replaces them', async () => {
     const { data } = await post('{ searchEngines { prefix isDefault } }');
     expect(data.searchEngines.filter((engine: { isDefault: boolean }) => engine.isDefault)).toHaveLength(1);
+
+    const set = await post(
+      'mutation ($input: SearchSettingsInput) { setSearchEngines(input: $input) { prefix isDefault } }',
+      { input: { engines: [SEARX] } },
+    );
+    expect(set.data.setSearchEngines).toEqual([{ prefix: 's', isDefault: true }]);
+    const refused = await post('mutation { setSearchEngines(input: { defaultPrefix: "nope" }) { prefix } }');
+    expect(refused.errors[0].extensions.code).toBe(ErrorCode.BadUserInput);
+    const reset = await post('mutation { setSearchEngines(input: null) { prefix } }');
+    expect(reset.data.setSearchEngines.length).toBeGreaterThan(1);
   });
 
   it('refuses a script URL with BAD_USER_INPUT', async () => {
@@ -119,5 +152,24 @@ describe('app', () => {
       body: JSON.stringify({ query: '{ pages { slug } }', padding: 'x'.repeat(OVERSIZED_PADDING_BYTES) }),
     });
     expect(response.status).toBe(HttpStatus.PayloadTooLarge);
+  });
+});
+
+describe('app with a database that does not answer', () => {
+  it('reports 503 from /healthz', async () => {
+    const data = await makeDataDir();
+    const database = await openTestDatabase();
+    const deps = await databaseDeps(database.db);
+    const failing = () => Promise.reject(new Error('connection refused'));
+    const server = createApp({ ...deps, checkDatabase: failing, dataDir: data.dir }).listen(0);
+    try {
+      const response = await fetch(`${await listening(server)}/healthz`);
+      expect(response.status).toBe(HttpStatus.ServiceUnavailable);
+      expect(await response.json()).toMatchObject({ ok: false, error: 'database unreachable' });
+    } finally {
+      await stop(server);
+      await database.close();
+      await data.remove();
+    }
   });
 });

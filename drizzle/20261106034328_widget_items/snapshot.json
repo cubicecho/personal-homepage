@@ -1,0 +1,123 @@
+{
+  "type": "diff",
+  "version": "9",
+  "dialect": "postgres",
+  "id": "41b2ec35-97d7-4629-a4e6-3e119a86e6d2",
+  "prevIds": [
+    "79a0674a-635a-45a6-a666-13dcd0962e85"
+  ],
+  "footprints": [
+    {
+      "statementType": "alter_column",
+      "statementTarget": [
+        "column",
+        "public",
+        "items",
+        "url"
+      ],
+      "writes": [
+        "s|colprop|public.items.url.notNull"
+      ],
+      "reads": [
+        "n|tbl|public.items",
+        "n|sch|public",
+        "n|col|public.items.url"
+      ],
+      "sqlHash": "61bba4c8e0d83618"
+    },
+    {
+      "statementType": "add_check",
+      "statementTarget": [
+        "table",
+        "public",
+        "items"
+      ],
+      "writes": [
+        "s|ck|public.items.ck_items_url",
+        "n|ck|public.items.ck_items_url",
+        "e|ck|public.items.ck_items_url",
+        "n|con|public.items.ck_items_url"
+      ],
+      "reads": [
+        "n|tbl|public.items",
+        "n|sch|public",
+        "n|col|public.items.url",
+        "n|col|public.items.kind"
+      ]
+    },
+    {
+      "statementType": "add_check",
+      "statementTarget": [
+        "table",
+        "public",
+        "items"
+      ],
+      "writes": [
+        "s|ck|public.items.ck_items_widget",
+        "n|ck|public.items.ck_items_widget",
+        "e|ck|public.items.ck_items_widget",
+        "n|con|public.items.ck_items_widget"
+      ],
+      "reads": [
+        "n|tbl|public.items",
+        "n|sch|public",
+        "n|col|public.items.widget",
+        "n|col|public.items.kind"
+      ]
+    },
+    {
+      "statementType": "alter_check",
+      "statementTarget": [
+        "table",
+        "public",
+        "items"
+      ],
+      "writes": [
+        "s|ck|public.items.ck_items_kind"
+      ],
+      "reads": [
+        "n|tbl|public.items",
+        "n|sch|public",
+        "n|col|public.items.kind",
+        "e|col|public.items.kind"
+      ],
+      "sqlHash": "42e68cc1d1b4b217"
+    }
+  ],
+  "deltas": [
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "items",
+        "name": "ck_items_url",
+        "value": "\"url\" is not null or \"kind\" = 'WIDGET'",
+        "entityType": "checks"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "items",
+        "name": "ck_items_widget",
+        "value": "(\"widget\" is not null) = (\"kind\" = 'WIDGET')",
+        "entityType": "checks"
+      }
+    },
+    {
+      "op": "alter",
+      "key": "columns\u0000[\"public\",\"items\",\"url\"]",
+      "set": {
+        "notNull": false
+      }
+    },
+    {
+      "op": "alter",
+      "key": "checks\u0000[\"public\",\"items\",\"ck_items_kind\"]",
+      "set": {
+        "value": "\"kind\" in ('LINK', 'FRAME', 'WIDGET')"
+      }
+    }
+  ]
+}
