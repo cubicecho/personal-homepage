@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { ItemInput, ItemKind, OpensIn } from '@/__generated__/graphql';
 import { useKnownGroups, VISIBLE_TO_COPY } from '@/auth/known-groups';
 import { useAccess } from '@/auth/use-access';
@@ -19,6 +19,7 @@ import { FormElement } from '@/components/ui/form-element';
 import { DiscoveredAppPicker } from '@/discovery/discovered-app-picker';
 import { FillInButton } from '@/discovery/fill-in-button';
 import { LinkedAppNote } from '@/discovery/linked-app-note';
+import { useDescribeUrl } from '@/discovery/use-discovery';
 import { FrameCheckNotice } from '@/frames/frame-check-notice';
 import { messageOf } from '@/lib/error-message';
 import { useLayoutColumns } from '@/sections/use-site-layout';
@@ -41,6 +42,10 @@ interface ItemDialogProps {
   sectionId?: string | undefined;
   /** Details a new item starts with, such as a discovered app's, linked to it. Ignored when editing. */
   prefill?: ItemPrefill | undefined;
+  /** Runs "Fill in from this address" once when a new item opens with an address, filling only empty fields. */
+  autoFillIn?: boolean | undefined;
+  /** Called once a new item is saved, with its title. */
+  onAdded?: ((title: string) => void) | undefined;
 }
 
 /** Details a new item starts with. */
@@ -124,7 +129,16 @@ function toInput(draft: ItemDraft): ItemInput {
 }
 
 /** Adds an item to a page, or changes one. */
-export function ItemDialog({ open, onOpenChange, page, item, sectionId, prefill }: ItemDialogProps) {
+export function ItemDialog({
+  open,
+  onOpenChange,
+  page,
+  item,
+  sectionId,
+  prefill,
+  autoFillIn = false,
+  onAdded,
+}: ItemDialogProps) {
   const limits = usePageLimits().data;
   const layoutColumns = useLayoutColumns();
   const addItem = useAddItem();
@@ -185,12 +199,32 @@ export function ItemDialog({ open, onOpenChange, page, item, sectionId, prefill 
           await updateItem.mutateAsync({ pageSlug: page.slug, id: item.id, input });
         } else {
           await addItem.mutateAsync({ pageSlug: page.slug, sectionId: value.sectionId || null, input });
+          onAdded?.(input.title);
         }
         onOpenChange(false);
       } catch (error) {
         setServerError(messageOf(error) ?? 'The item was not saved. Try again.');
       }
     },
+  });
+
+  const describe = useDescribeUrl();
+  const hasFilledIn = useRef(false);
+  useEffect(() => {
+    const address = (prefill?.url ?? '').trim();
+    const isUsable = URL.canParse(address) && ['http:', 'https:'].includes(new URL(address).protocol);
+    const shouldFillIn = autoFillIn && open && isEdit === false && isUsable && hasFilledIn.current === false;
+    if (shouldFillIn === false) {
+      return;
+    }
+    hasFilledIn.current = true;
+    describe.mutate(address, {
+      onSuccess: (described) => {
+        if (described.problem === null) {
+          fillEmpty(described);
+        }
+      },
+    });
   });
 
   return (

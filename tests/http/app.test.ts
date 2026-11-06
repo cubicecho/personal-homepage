@@ -67,6 +67,12 @@ describe('app', () => {
     expect(await response.json()).toMatchObject({ ok: true });
   });
 
+  it('tells anyone where the homepage is, which the bookmarklet opens', async () => {
+    const { data } = await post('{ ssoSetup { appUrl appUrlSource } }');
+    expect(data.ssoSetup.appUrlSource).toBe('FALLBACK');
+    expect(data.ssoSetup.appUrl).toMatch(/^http:\/\/localhost:\d+$/);
+  });
+
   it('serves the home page and the limits', async () => {
     const { data } = await post('{ pages { slug title isHome icon items { id } } pageLimits { maxPages } }');
     expect(data).toEqual({

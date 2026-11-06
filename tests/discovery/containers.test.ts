@@ -114,7 +114,9 @@ describe('the Docker socket source', () => {
 
   it('fails with a sentence when the socket is not there', async () => {
     const source = createDockerSocketSource({ socketPath: '/nonexistent/docker.sock', hostAddress: 'nas.lan' });
-    await expect(source.scan()).rejects.toThrow();
+    await expect(source.scan()).rejects.toThrow(
+      'There is no Docker socket at /nonexistent/docker.sock. Mount it read-only (/var/run/docker.sock:/var/run/docker.sock:ro), or set DOCKER_SOCKET.',
+    );
   });
 });
 
@@ -194,6 +196,99 @@ describe('the Dockhand source', () => {
     } finally {
       await dockhand.close();
     }
+  });
+
+  /**
+   * Starts a server that answers every request the same way.
+   *
+   * @param status - The status to answer with.
+   * @param headers - The headers to send.
+   * @param body - The body to send.
+   * @returns Its address and a close.
+   */
+  async function startAnswering(status: number, headers: Record<string, string>, body: string) {
+    const server = createServer((_req, res) => {
+      res.writeHead(status, headers).end(body);
+    });
+    server.listen(0, '127.0.0.1');
+    await new Promise<void>((resolve) => server.once('listening', resolve));
+    return {
+      base: `http://127.0.0.1:${portOf(server)}`,
+      close: () => new Promise<void>((resolve) => server.close(() => resolve())),
+    };
+  }
+
+  /**
+   * Scans a fake Dockhand that answers every request the same way, and returns the error it fails with.
+   *
+   * @param status - The status to answer with.
+   * @param headers - The headers to send.
+   * @param body - The body to send.
+   * @returns The message, and the address the source was pointed at.
+   */
+  async function failureFor(status: number, headers: Record<string, string>, body: string) {
+    const server = await startAnswering(status, headers, body);
+    try {
+      const scanned = createDockhandSource({ baseUrl: server.base, token: 'dh_secret' }).scan();
+      const error = await scanned.then(
+        () => null,
+        (failure: unknown) => failure,
+      );
+      return { message: error instanceof Error ? error.message : String(error), base: server.base };
+    } finally {
+      await server.close();
+    }
+  }
+
+  it("says when it reached this homepage's own page, not Dockhand", async () => {
+    const { message, base } = await failureFor(
+      200,
+      { 'content-type': 'text/html' },
+      '<!doctype html><html><body><div id="root"></div></body></html>',
+    );
+    expect(message).toContain(`${base}/api/environments answered with this homepage's own page`);
+    expect(message).toContain('"127.0.0.1:host-gateway"');
+    expect(message).not.toContain('dh_secret');
+  });
+
+  it('says when another web page answered instead of the API', async () => {
+    const { message } = await failureFor(200, { 'content-type': 'text/html' }, '<!doctype html><p>Sign in</p>');
+    expect(message).toMatch(
+      /answered with a web page, not Dockhand's API\. DOCKHAND_URL must be Dockhand's base address/,
+    );
+  });
+
+  it('names where a redirect went instead of following it', async () => {
+    const { message, base } = await failureFor(307, { location: '/login?redirect=%2Fapi' }, '');
+    expect(message).toBe(
+      `Dockhand redirected ${base}/api/environments to /login?redirect=%2Fapi. DOCKHAND_URL must be Dockhand's base address, for example http://dockhand.lan:3000.`,
+    );
+  });
+
+  it('says to check the token on a JSON 401', async () => {
+    const { message } = await failureFor(401, { 'content-type': 'application/json' }, '{"error":"unauthorized"}');
+    expect(message).toMatch(/answered 401 to .*\/api\/environments\. Check DOCKHAND_TOKEN\./);
+  });
+
+  it('says a server error came back as a web page', async () => {
+    const { message, base } = await failureFor(500, { 'content-type': 'text/html' }, '<h1>Oops</h1>');
+    expect(message).toBe(`Dockhand answered 500 with a web page to ${base}/api/environments.`);
+  });
+
+  it('names the address when nothing is listening there', async () => {
+    const server = await startAnswering(200, {}, '');
+    const { base } = server;
+    await server.close();
+    const failure = await createDockhandSource({ baseUrl: base, token: 'dh_secret' })
+      .scan()
+      .then(
+        () => null,
+        (error: unknown) => error,
+      );
+    const message = failure instanceof Error ? failure.message : String(failure);
+    expect(message).toBe(
+      `Nothing is listening at ${new URL(base).host} (connection refused). Check that Dockhand is running and DOCKHAND_URL is right.`,
+    );
   });
 
   it('says to check the token when Dockhand refuses it', async () => {
