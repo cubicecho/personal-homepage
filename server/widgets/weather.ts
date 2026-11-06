@@ -17,7 +17,7 @@ export interface WeatherFetchDeps extends FetchLimits {
 /** What Open-Meteo is asked for now. */
 const CURRENT = 'temperature_2m,apparent_temperature,weather_code,wind_speed_10m,is_day';
 /** What it is asked for by the hour. */
-const HOURLY = 'temperature_2m,weather_code,precipitation_probability';
+const HOURLY = 'temperature_2m,weather_code,precipitation_probability,is_day';
 /** What it is asked for by the day. */
 const DAILY = 'temperature_2m_max,temperature_2m_min';
 /** Today and tomorrow, so the coming hours cross midnight. */
@@ -83,6 +83,7 @@ const forecastSchema = z.object({
     temperature_2m: numberList,
     weather_code: numberList,
     precipitation_probability: numberList.nullish(),
+    is_day: numberList.nullish(),
   }),
   daily: z.object({ temperature_2m_max: numberList, temperature_2m_min: numberList }).nullish(),
 });
@@ -148,6 +149,7 @@ export async function fetchWeather(settings: WeatherWidgetSettings, deps: Weathe
       weatherCode,
       description: describeWeather(weatherCode),
       precipitationChance: hourly.precipitation_probability?.[index] ?? null,
+      isDay: hourly.is_day?.[index] !== 0,
     });
   }
   return {

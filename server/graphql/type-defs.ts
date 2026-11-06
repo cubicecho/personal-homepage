@@ -250,6 +250,8 @@ export const TYPE_DEFS = /* GraphQL */ `
     description: String!
     "The chance of rain or snow, in percent."
     precipitationChance: Float
+    "Whether the sun is up in that hour."
+    isDay: Boolean!
   }
 
   "What a weather widget shows."

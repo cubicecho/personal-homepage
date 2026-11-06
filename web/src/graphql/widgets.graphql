@@ -1,0 +1,63 @@
+fragment WidgetResultFields on WidgetResult {
+  __typename
+  ... on ApiWidgetResult {
+    rows {
+      label
+      value
+      warn
+    }
+  }
+  ... on RssWidgetResult {
+    feedTitle
+    entries {
+      title
+      url
+      source
+      publishedAt
+      summary
+    }
+  }
+  ... on WeatherWidgetResult {
+    temperatureUnit
+    windSpeedUnit
+    now {
+      temperature
+      apparentTemperature
+      weatherCode
+      description
+      windSpeed
+      isDay
+    }
+    high
+    low
+    hours {
+      time
+      temperature
+      weatherCode
+      description
+      precipitationChance
+      isDay
+    }
+  }
+}
+
+query WidgetData($pageSlug: ID!, $itemId: ID!) {
+  widgetData(pageSlug: $pageSlug, itemId: $itemId) {
+    fetchedAt
+    stale
+    error
+    result {
+      ...WidgetResultFields
+    }
+  }
+}
+
+query WidgetPreview($input: WidgetInput!) {
+  widgetPreview(input: $input) {
+    error
+    raw
+    result {
+      ...WidgetResultFields
+    }
+  }
+}

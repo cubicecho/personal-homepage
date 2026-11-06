@@ -1,5 +1,5 @@
 import type { ItemKind, OpensIn } from '@/__generated__/graphql';
-import { AppWindow, ArrowRight, ExternalLink, PanelsTopLeft } from '@/core/app-icons';
+import { AppWindow, ArrowRight, ExternalLink, Gauge, PanelsTopLeft } from '@/core/app-icons';
 
 /** How each kind of item is named and explained, and the glyph that marks it. */
 export const ITEM_KINDS = {
@@ -12,6 +12,11 @@ export const ITEM_KINDS = {
     Glyph: PanelsTopLeft,
     label: 'Frame',
     summary: 'The address shown inline on the page, across its full width.',
+  },
+  WIDGET: {
+    Glyph: Gauge,
+    label: 'Widget',
+    summary: 'Data the server fetches for you: values from an API, a feed, or the weather.',
   },
 } satisfies Record<ItemKind, { Glyph: unknown; label: string; summary: string }>;
 

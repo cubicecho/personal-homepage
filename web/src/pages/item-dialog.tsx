@@ -8,6 +8,8 @@ import { Button } from '@/components/ui/button';
 import { FormElement } from '@/components/ui/form-element';
 import { FrameCheckNotice } from '@/frames/frame-check-notice';
 import { messageOf } from '@/lib/error-message';
+import { checkWidget, toWidgetInput, type WidgetDraft, widgetDraftOf } from '@/widgets/widget-draft';
+import { WidgetSettingsField } from '@/widgets/widget-settings-field';
 import { checkFrameHeight, checkLength, checkTitle, checkUrl } from './form-checks';
 import { IconField } from './icon-field';
 import { ITEM_KINDS, OPENS_IN } from './item-kinds';
@@ -37,6 +39,8 @@ interface ItemDraft {
   sectionId: string;
   checkEnabled: boolean;
   checkUrl: string;
+  /** A widget's settings. Kept while another kind is chosen, so switching back loses nothing. */
+  widget: WidgetDraft;
 }
 
 const KIND_OPTIONS: readonly RadioOption[] = Object.entries(ITEM_KINDS).map(([kind, { Glyph, label, summary }]) => ({
@@ -65,16 +69,21 @@ const OPENS_IN_OPTIONS: readonly RadioOption[] = Object.entries(OPENS_IN).map(
 function toInput(draft: ItemDraft): ItemInput {
   const description = draft.description.trim();
   const isFrame = draft.kind === 'FRAME';
+  const isWidget = draft.kind === 'WIDGET';
+  const url = draft.url.trim();
+  // A widget with no address has nothing to check unless it is given a check address.
+  const hasSomethingToCheck = url !== '' || draft.checkUrl.trim() !== '';
   return {
     kind: draft.kind,
-    opensIn: isFrame ? null : draft.opensIn,
+    opensIn: draft.kind === 'LINK' ? draft.opensIn : null,
     title: draft.title.trim(),
-    url: draft.url.trim(),
+    url: isWidget && url === '' ? null : url,
     icon: draft.icon,
     description: description === '' ? null : description,
     frameHeightPx: isFrame ? draft.frameHeightPx : null,
-    checkEnabled: draft.checkEnabled,
+    checkEnabled: draft.checkEnabled && hasSomethingToCheck,
     checkUrl: draft.checkUrl.trim(),
+    widget: isWidget ? toWidgetInput(draft.widget) : null,
   };
 }
 
@@ -100,6 +109,7 @@ export function ItemDialog({ open, onOpenChange, page, item, sectionId }: ItemDi
     sectionId: sectionId ?? page.sections[0]?.id ?? '',
     checkEnabled: item?.checkEnabled ?? true,
     checkUrl: item?.checkUrl ?? '',
+    widget: widgetDraftOf(item?.widget ?? null),
   };
   const form = useAppForm({
     defaultValues,
@@ -141,19 +151,31 @@ export function ItemDialog({ open, onOpenChange, page, item, sectionId }: ItemDi
             placeholder="Jellyfin"
             validators={{ onChange: ({ value }) => checkTitle(value, limits?.maxTitleLength) }}
           />
-          <InputField
-            form={form}
-            name="url"
-            label="Address"
-            required
-            type="url"
-            inputMode="url"
-            autoCapitalize="none"
-            spellCheck={false}
-            placeholder="http://nas.local:8096"
-            description="Use the address other devices on your network reach it at, not localhost."
-            validators={{ onChange: ({ value }) => checkUrl(value, limits?.maxUrlLength) }}
-          />
+          <form.Subscribe selector={(state) => state.values.kind === 'WIDGET'}>
+            {(isWidget) => (
+              <InputField
+                key={isWidget ? 'widget-link' : 'address'}
+                form={form}
+                name="url"
+                label={isWidget ? 'Link' : 'Address'}
+                required={isWidget === false}
+                type="url"
+                inputMode="url"
+                autoCapitalize="none"
+                spellCheck={false}
+                placeholder="http://nas.local:8096"
+                description={
+                  isWidget
+                    ? 'Optional. Where the widget’s title takes you, such as the service whose numbers it shows.'
+                    : 'Use the address other devices on your network reach it at, not localhost.'
+                }
+                validators={{
+                  onChange: ({ value }) =>
+                    isWidget && value.trim() === '' ? undefined : checkUrl(value, limits?.maxUrlLength),
+                }}
+              />
+            )}
+          </form.Subscribe>
           <TextareaField
             form={form}
             name="description"
@@ -186,9 +208,21 @@ export function ItemDialog({ open, onOpenChange, page, item, sectionId }: ItemDi
               ) : null
             }
           </form.Subscribe>
+          <form.Subscribe selector={(state) => state.values.kind}>
+            {(kind) =>
+              kind === 'WIDGET' ? (
+                <WidgetSettingsField
+                  form={form}
+                  name="widget"
+                  label="Widget"
+                  validators={{ onChange: ({ value }) => checkWidget(value, limits) }}
+                />
+              ) : null
+            }
+          </form.Subscribe>
           <form.Subscribe selector={(state) => state.values}>
             {({ kind, opensIn, url }) =>
-              kind === 'FRAME' || opensIn === 'APP' ? (
+              kind === 'FRAME' || (kind === 'LINK' && opensIn === 'APP') ? (
                 <FrameCheckNotice
                   url={url}
                   isTyping

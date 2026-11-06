@@ -60,6 +60,8 @@ export interface WeatherHour {
   description: string;
   /** The chance of rain or snow, in percent. */
   precipitationChance: number | null;
+  /** Whether the sun is up in that hour, so a clear night is drawn as a moon. */
+  isDay: boolean;
 }
 
 /** What a weather widget shows. */

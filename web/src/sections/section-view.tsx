@@ -5,21 +5,25 @@ import { Plus } from '@/components/ui/icons';
 import { ItemFrame } from '@/pages/item-frame';
 import { ItemMenu } from '@/pages/item-menu';
 import { ItemTile } from '@/pages/item-tile';
-import type { Item, Page, Section } from '@/pages/use-pages';
+import { type AddressedItem, hasAddress, type Item, type Page, type Section } from '@/pages/use-pages';
+import { WidgetCard } from '@/widgets/widget-card';
 import { useSectionOpen } from './fold-state';
 import { SectionMenu } from './section-menu';
 
-/** A run of consecutive items drawn the same way: tiles share a grid, a frame stands alone. */
-type Segment = { kind: 'tiles'; entries: IndexedItem[] } | { kind: 'frame'; entry: IndexedItem };
+/** A run of consecutive items drawn the same way: tiles share a grid, a frame or a widget stands alone. */
+type Segment =
+  | { kind: 'tiles'; entries: IndexedItem<AddressedItem>[] }
+  | { kind: 'frame'; entry: IndexedItem<AddressedItem> }
+  | { kind: 'widget'; entry: IndexedItem };
 
 /** An item and where it sits in its section. */
-interface IndexedItem {
-  item: Item;
+interface IndexedItem<T extends Item = Item> {
+  item: T;
   index: number;
 }
 
 /**
- * Groups a section's items for drawing: consecutive tiles into one grid, each frame on its own.
+ * Groups a section's items for drawing: consecutive tiles into one grid, each frame and widget on its own.
  *
  * @param items - The section's items, in order.
  * @returns The segments, in order.
@@ -27,6 +31,14 @@ interface IndexedItem {
 function segmentsOf(items: readonly Item[]): Segment[] {
   const segments: Segment[] = [];
   items.forEach((item, index) => {
+    if (item.kind === 'WIDGET') {
+      segments.push({ kind: 'widget', entry: { item, index } });
+      return;
+    }
+    // Links and frames always have an address; the check only tells the type so.
+    if (hasAddress(item) === false) {
+      return;
+    }
     const entry = { item, index };
     if (item.kind === 'FRAME') {
       segments.push({ kind: 'frame', entry });
@@ -94,7 +106,7 @@ interface SectionItemsProps {
   onEditItem: (item: Item) => void;
 }
 
-/** A section's items as tile grids and frames, or one line saying it is empty. */
+/** A section's items as tile grids, frames and widgets, or one line saying it is empty. */
 function SectionItems({ page, section, onAddItem, onEditItem }: SectionItemsProps) {
   if (section.items.length === 0) {
     return (
@@ -119,8 +131,18 @@ function SectionItems({ page, section, onAddItem, onEditItem }: SectionItemsProp
 
   return (
     <div className="flex flex-col gap-3">
-      {segmentsOf(section.items).map((segment) =>
-        segment.kind === 'frame' ? (
+      {segmentsOf(section.items).map((segment) => {
+        if (segment.kind === 'widget') {
+          return (
+            <WidgetCard
+              key={segment.entry.item.id}
+              page={page}
+              item={segment.entry.item}
+              menuSlot={menuFor(segment.entry)}
+            />
+          );
+        }
+        return segment.kind === 'frame' ? (
           <ItemFrame key={segment.entry.item.id} item={segment.entry.item} menuSlot={menuFor(segment.entry)} />
         ) : (
           <ul
@@ -132,8 +154,8 @@ function SectionItems({ page, section, onAddItem, onEditItem }: SectionItemsProp
               <ItemTile key={entry.item.id} page={page} item={entry.item} menuSlot={menuFor(entry)} />
             ))}
           </ul>
-        ),
-      )}
+        );
+      })}
     </div>
   );
 }

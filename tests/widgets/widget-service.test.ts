@@ -339,6 +339,7 @@ describe('widget service', () => {
           temperature_2m: [11, 12, 13],
           weather_code: [61, 3, 0],
           precipitation_probability: [80, 40, 5],
+          is_day: [1, 1, 0],
         },
         daily: { temperature_2m_max: [14], temperature_2m_min: [6] },
       })(req, res, '');
@@ -367,8 +368,22 @@ describe('widget service', () => {
       high: 14,
       low: 6,
       hours: [
-        { time: '2026-11-05T14:00', temperature: 12, weatherCode: 3, description: 'Overcast', precipitationChance: 40 },
-        { time: '2026-11-05T15:00', temperature: 13, weatherCode: 0, description: 'Clear', precipitationChance: 5 },
+        {
+          time: '2026-11-05T14:00',
+          temperature: 12,
+          weatherCode: 3,
+          description: 'Overcast',
+          precipitationChance: 40,
+          isDay: true,
+        },
+        {
+          time: '2026-11-05T15:00',
+          temperature: 13,
+          weatherCode: 0,
+          description: 'Clear',
+          precipitationChance: 5,
+          isDay: false,
+        },
       ],
     });
   });
