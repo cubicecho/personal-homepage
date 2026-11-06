@@ -1,3 +1,12 @@
+## [2.2.1](https://github.com/cubicecho/personal-homepage/compare/v2.2.0...v2.2.1) (2026-11-06)
+
+
+### Bug Fixes
+
+* **db:** keep the address a provider was paired from ([082de9d](https://github.com/cubicecho/personal-homepage/commit/082de9d705f0d3e5aaae15bb404aab02f60eefaf))
+* **docker:** pass every variable in .env to the app ([3b5cda7](https://github.com/cubicecho/personal-homepage/commit/3b5cda73f726ceefb63873243fe54dccc5a0c7df))
+* send OIDC sign-ins back to the address the homepage is open at, not localhost ([030af10](https://github.com/cubicecho/personal-homepage/commit/030af104d9c83523fd4a7ddb43e1c3fabb6ecbed))
+
 # [2.2.0](https://github.com/cubicecho/personal-homepage/compare/v2.1.0...v2.2.0) (2026-11-06)
 
 
