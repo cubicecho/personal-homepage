@@ -2,7 +2,7 @@
   "name": "personal-homepage",
   "private": true,
   "license": "MIT",
-  "version": "3.2.0",
+  "version": "3.3.0",
   "description": "A self-hosted start page: tiles for the services on your network, pages of links, frames and apps, kept in a built-in database or Postgres.",
   "type": "module",
   "engines": {

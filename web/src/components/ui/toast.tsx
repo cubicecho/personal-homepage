@@ -3,15 +3,35 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState } f
 import { CircleAlert, CircleCheck, Info, TriangleAlert, X } from "@/components/ui/icons";
 import { IconClassContext } from "@/components/ui/icons-base";
 import { type BottomBarUntil, useBottomBar } from "@/lib/bottom-bar";
-import { cn } from "@/lib/utils";
+import { cn, type SlotNode } from "@/lib/utils";
 
 /** What kind of message a toast is, which picks its colour and how long it stays. */
 export type ToastTone = "error" | "warning" | "positive" | "info";
 
-type Toast = { id: number; message: string; tone: ToastTone };
+/**
+ * What a toast carries besides its words: elements to act on the message with. A function is handed
+ * the toast's `dismiss`, for content that should close it — a link that navigates away.
+ */
+export type ToastActionSlot = SlotNode | ((dismiss: () => void) => SlotNode);
+
+/** What else a toast can carry. */
+export type ToastOptions = {
+  /**
+   * Elements under the message: a link-styled `Button`, an Undo, anything. Pressing them does not
+   * dismiss the toast; a function `(dismiss) => …` gets the toast's `dismiss` to do that.
+   */
+  actionSlot?: ToastActionSlot | undefined;
+};
+
+type Toast = {
+  id: number;
+  message: string;
+  tone: ToastTone;
+  actionSlot: ToastActionSlot | undefined;
+};
 
 /** Show a message. Defaults to `error`, which is what nearly every caller wants. */
-type ShowToast = (message: string, tone?: ToastTone) => void;
+type ShowToast = (message: string, tone?: ToastTone, options?: ToastOptions) => void;
 
 const ToastContext = createContext<ShowToast | null>(null);
 
@@ -22,6 +42,12 @@ const DURATION_MS: Record<ToastTone, number> = {
   positive: 3000,
   info: 3000,
 };
+
+/**
+ * The least time a toast with an `actionSlot` stays up: a confirmation's three seconds is enough to
+ * read "Moved." and not enough to move the pointer to "Go to Media".
+ */
+const ACTION_MIN_DURATION_MS = 10000;
 
 /**
  * The tone's glyph and its ink: the only place the tone's hue reaches the toast. The box is a
@@ -83,12 +109,20 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const show = useCallback<ShowToast>(
-    (message, tone = "error") => {
+    (message, tone = "error", options = {}) => {
       const id = nextId.current++;
-      setToasts((prev) => [...prev, { id, message, tone }]);
+      const { actionSlot } = options;
+      const hasAction = actionSlot !== undefined && actionSlot !== null && actionSlot !== false;
+      const duration = hasAction
+        ? Math.max(DURATION_MS[tone], ACTION_MIN_DURATION_MS)
+        : DURATION_MS[tone];
+      setToasts((prev) => [
+        ...prev,
+        { id, message, tone, actionSlot: hasAction ? actionSlot : undefined },
+      ]);
       timers.current.set(
         id,
-        setTimeout(() => dismiss(id), DURATION_MS[tone]),
+        setTimeout(() => dismiss(id), duration),
       );
     },
     [dismiss],
@@ -140,7 +174,18 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                     {glyph}
                   </IconClassContext.Provider>
                 </div>
-                <span className="cube-rn-text flex-1 text-sm text-foreground">{toast.message}</span>
+                {/* The action sits under the words rather than beside them: the toast is a set width,
+                    and a link beside the message would squeeze it to a column. */}
+                <div className="cube-rn-view min-w-0 flex-1 gap-1.5">
+                  <span className="cube-rn-text text-sm text-foreground">{toast.message}</span>
+                  {toast.actionSlot === undefined ? null : (
+                    <div className="cube-rn-view flex-row flex-wrap items-center gap-2">
+                      {typeof toast.actionSlot === "function"
+                        ? toast.actionSlot(() => dismiss(toast.id))
+                        : toast.actionSlot}
+                    </div>
+                  )}
+                </div>
                 <button
                   type="button"
                   onClick={() => dismiss(toast.id)}
