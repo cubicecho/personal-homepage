@@ -1,5 +1,5 @@
 import { assertObjectType, extendSchema, type GraphQLSchema, parse } from 'graphql';
-import { publicView, serverUrl } from '../core/config.ts';
+import { publicView } from '../core/config.ts';
 import type { Context } from '../core/context.ts';
 import { SSO_START_PATH } from '../http/sso.ts';
 import type { Access } from './access.ts';
@@ -91,7 +91,8 @@ export function applyAuthExtension(schema: GraphQLSchema): GraphQLSchema {
     const oidc = context.authHost.oidc();
     return {
       mode: context.access.mode,
-      sso: oidc === null ? null : { name: oidc.name, signInUrl: `${serverUrl()}${SSO_START_PATH}` },
+      sso:
+        oidc === null ? null : { name: oidc.name, signInUrl: `${context.authHost.urls().serverUrl}${SSO_START_PATH}` },
       forwardAuth: context.forwardAuth.isEnabled,
       publicView: publicView(),
     };

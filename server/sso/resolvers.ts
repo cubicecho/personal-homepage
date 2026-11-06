@@ -2,10 +2,10 @@ import { assertObjectType, extendSchema, GraphQLError, type GraphQLSchema, parse
 import { AuthMode } from '../auth/access.ts';
 import { hasUsers } from '../auth/admin.ts';
 import { AuthFlow, throttle } from '../auth/throttle.ts';
-import { oidcRedirectUri } from '../core/config.ts';
+import { isLoopbackHost, originOf, type SiteUrls, siteUrls } from '../core/config.ts';
 import type { Context } from '../core/context.ts';
 import { badInput, conflict, ErrorCode, forbidden } from '../core/errors.ts';
-import { PairingError, PairingFailure, pair, unpair } from './pairing.ts';
+import { type PairingAddress, PairingError, PairingFailure, pair, repoint, unpair } from './pairing.ts';
 import { effectiveOidc, SsoSource } from './settings.ts';
 
 // Pairing the instance with an OIDC provider from the app (pairing.ts): paste the setup URL the provider
@@ -19,6 +19,10 @@ import { effectiveOidc, SsoSource } from './settings.ts';
 // - after that, editors only (the admin and ADMIN_GROUPS). Otherwise a stranger could point sign-in at a
 //   provider of their own and sign in as any existing address.
 // A provider set in the environment (OIDC_ISSUER) wins, and cannot be changed from here.
+//
+// The callback registered with the provider is under the address people open the homepage at: APP_URL,
+// or else the browser's own address when it pairs (sent by the web app, or read from the Origin header).
+// A callback on localhost that a browser on another machine could never come back to is refused.
 
 const SSO_SDL = parse(`
   "Where the instance's OIDC provider comes from."
@@ -40,8 +44,33 @@ const SSO_SDL = parse(`
     name: String
     "Whether the caller may pair a provider, or disconnect the paired one."
     canPair: Boolean!
-    "The redirect URI to register with a provider by hand, for an OIDC_ISSUER setup."
+    "The callback registered with the provider: the redirect URI, under appUrl (or SERVER_URL)."
     redirectUri: String!
+    "Where sign-ins come back to: the address people open the homepage at."
+    appUrl: String!
+    "Where appUrl came from."
+    appUrlSource: AppUrlSource!
+    "Whether the callback is a localhost address, which only a browser on the server itself can reach."
+    callbackIsLocal: Boolean!
+  }
+
+  "Where the address people open the homepage at came from."
+  enum AppUrlSource {
+    "APP_URL in the server's environment."
+    ENV
+    "Recorded from the browser when the provider was paired."
+    PAIRED
+    "Neither: the server's own localhost address."
+    FALLBACK
+  }
+
+  "What moving the paired client to a new address did."
+  type SsoCallbackUpdate {
+    setup: SsoSetup!
+    "Whether the provider now has the new callback registered."
+    providerUpdated: Boolean!
+    "Why it does not, and what to do in the provider instead. Null when it does."
+    message: String
   }
 
   extend type Query {
@@ -51,10 +80,18 @@ const SSO_SDL = parse(`
 
   extend type Mutation {
     """
-    Pairs with the provider a setup URL names (\`<issuer>#setup=<token>&name=<name>\`). BAD_USER_INPUT or
-    TOO_MANY_REQUESTS with \`extensions.reason\` when the provider would not pair.
+    Pairs with the provider a setup URL names (\`<issuer>#setup=<token>&name=<name>\`). \`appUrl\` is the
+    address the browser has the homepage open at (\`window.location.origin\`), recorded as where sign-ins come
+    back to while APP_URL is unset; the request's Origin header stands in when it is left out.
+    BAD_USER_INPUT or TOO_MANY_REQUESTS with \`extensions.reason\` when the provider would not pair.
     """
-    pairSso(setupUrl: String!): SsoSetup!
+    pairSso(setupUrl: String!, appUrl: String): SsoSetup!
+    """
+    Moves the paired provider's client to the address the homepage is open at now: records it, and asks the
+    provider to register the new callback (RFC 7592). Same rule as pairSso. The address is recorded even when
+    the provider refuses; \`message\` then says what to change in the provider by hand.
+    """
+    updateSsoAppUrl(appUrl: String): SsoCallbackUpdate!
     "Deletes the paired provider's client and stops offering it on the sign-in page. Same rule as pairSso."
     unpairSso: SsoSetup!
   }
@@ -85,15 +122,57 @@ export async function canPairSso(ctx: Context, source: SsoSource): Promise<boole
  * @returns How sign-in is set up, with the issuer only for a caller who may pair.
  */
 async function ssoSetup(ctx: Context) {
-  const { config, source } = await effectiveOidc(ctx.db);
+  const { config, source, urls } = await effectiveOidc(ctx.db);
   const canPair = await canPairSso(ctx, source);
   return {
     source,
     issuer: canPair ? (config?.issuer ?? null) : null,
     name: config?.name ?? null,
     canPair,
-    redirectUri: oidcRedirectUri(),
+    redirectUri: urls.redirectUri,
+    appUrl: urls.appUrl,
+    appUrlSource: urls.source,
+    callbackIsLocal: isLocalCallback(urls),
   };
+}
+
+/**
+ * Checks whether a callback only works from the server itself.
+ *
+ * @param urls - The addresses.
+ * @returns True when the callback's host is localhost or a loopback address.
+ */
+function isLocalCallback(urls: SiteUrls): boolean {
+  return isLoopbackHost(new URL(urls.redirectUri).hostname);
+}
+
+/**
+ * Works out where a pairing should send sign-ins back to: APP_URL when set, otherwise the address the browser
+ * has the homepage open at.
+ *
+ * @param ctx - The request.
+ * @param sent - What the web app sent as `appUrl`, if anything.
+ * @returns The addresses to register, and the browser's address to record.
+ * @throws BAD_USER_INPUT when `appUrl` is not an http(s) origin, and BAD_USER_INPUT (reason BAD_APP_URL)
+ * when the callback would be localhost but the browser is on another machine.
+ */
+function pairingAddress(ctx: Context, sent: string | null | undefined): PairingAddress {
+  const hasSent = sent !== null && sent !== undefined && sent.trim() !== '';
+  const sentOrigin = hasSent ? originOf(sent) : null;
+  if (hasSent && sentOrigin === null) {
+    throw badInput('appUrl must be an address such as http://homepage.lan:3000, with no path.');
+  }
+  const recordedAppUrl = sentOrigin ?? originOf(ctx.headers.get('origin') ?? '');
+  const urls = siteUrls(recordedAppUrl);
+  const isRemoteCaller = isLoopbackHost(ctx.ip) === false;
+  if (isLocalCallback(urls) && isRemoteCaller) {
+    throw new GraphQLError(
+      `Sign-in would come back to ${urls.redirectUri}, which only works on the server itself. Set APP_URL to the ` +
+        'address you open the homepage at (for example http://homepage.lan:3000), restart, and try again.',
+      { extensions: { code: ErrorCode.BadUserInput, reason: PairingFailure.BadAppUrl } },
+    );
+  }
+  return { urls, recordedAppUrl };
 }
 
 /**
@@ -129,7 +208,7 @@ function pairingError(error: unknown): unknown {
 }
 
 /**
- * Adds `ssoSetup`, `pairSso` and `unpairSso` to the schema.
+ * Adds `ssoSetup`, `pairSso`, `updateSsoAppUrl` and `unpairSso` to the schema.
  *
  * @param schema - The schema, which must already have a Mutation type.
  * @returns The extended schema.
@@ -139,14 +218,15 @@ export function applySsoExtension(schema: GraphQLSchema): GraphQLSchema {
   const queries = assertObjectType(extendedSchema.getType('Query')).getFields();
   const mutations = assertObjectType(extendedSchema.getType('Mutation')).getFields();
   const { ssoSetup: setupField } = queries;
-  const { pairSso, unpairSso } = mutations;
-  if (setupField === undefined || pairSso === undefined || unpairSso === undefined) {
+  const { pairSso, updateSsoAppUrl, unpairSso } = mutations;
+  const isMissing = setupField === undefined || pairSso === undefined || unpairSso === undefined;
+  if (isMissing || updateSsoAppUrl === undefined) {
     throw new Error('the SSO extension did not add its fields');
   }
 
   setupField.resolve = (_parent: unknown, _args: unknown, context: Context) => ssoSetup(context);
 
-  pairSso.resolve = async (_parent: unknown, args: { setupUrl: string }, context: Context) => {
+  pairSso.resolve = async (_parent: unknown, args: { setupUrl: string; appUrl?: string | null }, context: Context) => {
     throttle(context, AuthFlow.PairSso);
     const source = await requirePairing(context);
     if (source === SsoSource.Paired) {
@@ -155,13 +235,25 @@ export function applySsoExtension(schema: GraphQLSchema): GraphQLSchema {
     if (args.setupUrl.trim() === '') {
       throw badInput('Paste the setup URL your provider gave you.');
     }
+    const address = pairingAddress(context, args.appUrl);
     try {
-      await pair(context.db, args.setupUrl);
+      await pair(context.db, args.setupUrl, address);
     } catch (error) {
       throw pairingError(error);
     }
     await context.authHost.rebuild();
     return ssoSetup(context);
+  };
+
+  updateSsoAppUrl.resolve = async (_parent: unknown, args: { appUrl?: string | null }, context: Context) => {
+    throttle(context, AuthFlow.PairSso);
+    const source = await requirePairing(context);
+    if (source !== SsoSource.Paired) {
+      throw badInput('Sign-in is not paired with a provider, so there is no callback to move.');
+    }
+    const result = await repoint(context.db, pairingAddress(context, args.appUrl));
+    await context.authHost.rebuild();
+    return { setup: await ssoSetup(context), ...result };
   };
 
   unpairSso.resolve = async (_parent: unknown, _args: unknown, context: Context) => {

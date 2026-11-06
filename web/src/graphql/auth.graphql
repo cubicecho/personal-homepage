@@ -26,21 +26,36 @@ query AuthConfig {
   }
 }
 
+fragment SsoSetupFields on SsoSetup {
+  source
+  issuer
+  name
+  canPair
+  redirectUri
+  appUrl
+  appUrlSource
+  callbackIsLocal
+}
+
 query SsoSetup {
   ssoSetup {
-    source
-    issuer
-    name
-    canPair
-    redirectUri
+    ...SsoSetupFields
   }
 }
 
-mutation PairSso($setupUrl: String!) {
-  pairSso(setupUrl: $setupUrl) {
-    source
-    name
-    canPair
+mutation PairSso($setupUrl: String!, $appUrl: String) {
+  pairSso(setupUrl: $setupUrl, appUrl: $appUrl) {
+    ...SsoSetupFields
+  }
+}
+
+mutation UpdateSsoAppUrl($appUrl: String) {
+  updateSsoAppUrl(appUrl: $appUrl) {
+    setup {
+      ...SsoSetupFields
+    }
+    providerUpdated
+    message
   }
 }
 

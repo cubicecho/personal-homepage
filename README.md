@@ -35,7 +35,12 @@ npm run build && npm start     # one process on PORT (default 3000) serving dist
 docker compose up -d --build   # the same, in a container, with the database in a named volume
 ```
 
-`.env.example` documents `DATA_DIR`, `DATABASE_URL`, `DB_CONNECT_TIMEOUT_MS`, `PORT` and `TRUST_PROXY`.
+`.env.example` documents every setting. Copy it to `.env` and fill in what you need, `APP_URL` first.
+
+**With Docker Compose,** settings go in `.env` beside `docker-compose.yml` (or in the service's `environment`), and
+every variable in `.env` reaches the app. After changing `.env`, run `docker compose up -d` so the container is
+recreated: `docker compose restart` keeps the old values. Inside the container the app always listens on 3000 and
+keeps its data in `/data`; `PORT` in `.env` chooses the port on the host.
 
 Released images are published to GHCR as `ghcr.io/cubicecho/personal-homepage`, tagged with the version and
 `latest`. A `feat:` or `fix:` commit on `main` cuts a release once CI passes.
@@ -289,6 +294,11 @@ sign-in existed, so an upgrade locks nobody out. It says so above every page unt
 Sign-in is set up in one of two ways, both made for [heautou](https://github.com/cubicecho/heautou). Any OpenID
 Connect provider, or any proxy that sends Authelia-style `Remote-*` headers, works too.
 
+**First, set `APP_URL` to the address you open the homepage at,** such as `APP_URL=http://homepage.lan:3000` or
+`https://home.example.com`. After signing in, the provider sends the browser back to
+`<APP_URL>/api/auth/callback/oidc`, the _callback address_, so it has to be an address your browser can reach.
+Settings shows the callback address in use.
+
 ### Pairing with heautou (OpenID Connect)
 
 1. In heautou, go to **Clients → Pair an app**. Choose the groups that may sign in, keep the groups claim as
@@ -298,10 +308,31 @@ Connect provider, or any proxy that sends Authelia-style `Remote-*` headers, wor
 3. The homepage now asks for sign-in. Choose **Sign in with heautou**. The first person to sign in becomes the
    admin.
 
-To unpair, choose **Disconnect** on the same page: the client is deleted at heautou too. To pin the provider
-instead, set `OIDC_ISSUER` and `OIDC_CLIENT_ID` (and `OIDC_CLIENT_SECRET`) in the environment. That wins over a
-pairing, and can't be changed from the app. Register the redirect URI that Settings shows,
-`<APP_URL>/api/auth/callback/oidc`.
+- **The callback address registered** is under `APP_URL`. If `APP_URL` isn't set, pairing records the address your
+  browser has the homepage open at, and uses that. Pairing from another machine is refused when it would register
+  a `localhost` callback, since a browser elsewhere could never come back to it.
+- **Unpairing:** choose **Disconnect** on the same page. The client is deleted at heautou too.
+- **Pinning the provider instead:** set `OIDC_ISSUER` and `OIDC_CLIENT_ID` (and `OIDC_CLIENT_SECRET`) in the
+  environment. That wins over a pairing, and can't be changed from the app. `APP_URL` is then required, and you
+  register the callback address that Settings shows with the provider yourself.
+
+### When the callback address is wrong
+
+The provider sends the browser to an address it can't open (often `localhost`), so nobody can finish signing in.
+Ways to fix it, quickest first:
+
+1. **Fix the callback address,** shown on the sign-in page and in Settings while the address is wrong. Open the
+   homepage at the address people use and choose it. The homepage records that address and asks the provider to
+   register the new callback (heautou supports this, RFC 7592). If the provider refuses, the message says which
+   redirect URI to set in the provider by hand. In heautou that's **Clients →** the homepage's client **→ Redirect
+   URIs**.
+2. **Set `APP_URL`** and restart (with Compose: `docker compose up -d`), then change the client's redirect URI in
+   the provider to the callback address the boot log prints (`[auth] callback address …`).
+3. **Start over:** stop the homepage, run `npm run sso:reset`, start it again, and pair again. With Docker Compose:
+   `docker compose run --rm personal-homepage node server/sso/reset-cli.ts`. This forgets the pairing and asks the
+   provider to delete the client. With no way to sign in set up, the homepage is open again until it is re-paired.
+   Accounts are kept, and the admin is still the admin once they sign in again. With Postgres it can run while the
+   homepage does; restart the homepage afterwards.
 
 - **Groups:** a person's groups come from the ID token's `groups` claim (`OIDC_GROUPS_CLAIM` to read another),
   copied at each sign-in.
@@ -344,15 +375,16 @@ Editors see everything, to be able to manage it.
 
 ### Settings
 
-| Variable                                              | Meaning                                                                                           |
-| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| `APP_URL`                                             | Where people open the homepage, such as `https://home.example.com`. Needed for the OIDC redirect. |
-| `BETTER_AUTH_SECRET`                                  | What sessions are signed with. Unset, one is made and kept in `DATA_DIR/auth-secret`.             |
-| `OIDC_ISSUER`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET` | A provider set in the environment, instead of pairing.                                            |
-| `OIDC_NAME`, `OIDC_CLIENT_AUTH`, `OIDC_GROUPS_CLAIM`  | Its button name, how the secret is sent, and the groups claim.                                    |
-| `FORWARD_AUTH_TRUSTED_PROXIES`                        | Addresses and CIDR ranges whose `Remote-*` headers are believed.                                  |
-| `ADMIN_GROUPS`                                        | Groups whose members may edit, besides the admin.                                                 |
-| `PUBLIC_VIEW`                                         | `true` to let people who are not signed in see (not change) the pages.                            |
+| Variable                                              | Meaning                                                                                            |
+| ----------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `APP_URL`                                             | The address you open the homepage at, such as `https://home.example.com`. Sign-ins come back here. |
+| `SERVER_URL`                                          | Where the server is, when it is not under `APP_URL`. The callback address is under it.             |
+| `BETTER_AUTH_SECRET`                                  | What sessions are signed with. Unset, one is made and kept in `DATA_DIR/auth-secret`.              |
+| `OIDC_ISSUER`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET` | A provider set in the environment, instead of pairing.                                             |
+| `OIDC_NAME`, `OIDC_CLIENT_AUTH`, `OIDC_GROUPS_CLAIM`  | Its button name, how the secret is sent, and the groups claim.                                     |
+| `FORWARD_AUTH_TRUSTED_PROXIES`                        | Addresses and CIDR ranges whose `Remote-*` headers are believed.                                   |
+| `ADMIN_GROUPS`                                        | Groups whose members may edit, besides the admin.                                                  |
+| `PUBLIC_VIEW`                                         | `true` to let people who are not signed in see (not change) the pages.                             |
 
 ## Security
 

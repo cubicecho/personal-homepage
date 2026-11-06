@@ -1,0 +1,47 @@
+{
+  "type": "diff",
+  "version": "9",
+  "dialect": "postgres",
+  "id": "5febc4be-307d-4879-9bc3-c9054a3cda58",
+  "prevIds": [
+    "d36abe73-8784-40fb-8854-13740e866ff9"
+  ],
+  "footprints": [
+    {
+      "statementType": "add_column",
+      "statementTarget": [
+        "column",
+        "public",
+        "oidc_settings",
+        "app_url"
+      ],
+      "writes": [
+        "s|col|public.oidc_settings.app_url",
+        "n|col|public.oidc_settings.app_url",
+        "e|col|public.oidc_settings.app_url"
+      ],
+      "reads": [
+        "n|tbl|public.oidc_settings",
+        "n|sch|public"
+      ]
+    }
+  ],
+  "deltas": [
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "oidc_settings",
+        "name": "app_url",
+        "type": "text",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    }
+  ]
+}

@@ -3,7 +3,7 @@ import type { Server } from 'node:http';
 import { eq } from 'drizzle-orm';
 import express from 'express';
 import { exportJWK, generateKeyPair, SignJWT } from 'jose';
-import { fixedAuthHost } from '../../server/auth/auth-host.ts';
+import { createAuthHost, fixedAuthHost } from '../../server/auth/auth-host.ts';
 import { createAuth } from '../../server/auth/better-auth.ts';
 import type { OidcConfig } from '../../server/core/config.ts';
 import { ErrorCode } from '../../server/core/errors.ts';
@@ -12,6 +12,7 @@ import type { OpenedDatabase } from '../../server/db/client.ts';
 import { users } from '../../server/db/schema.ts';
 import { createApp } from '../../server/http/app.ts';
 import { SSO_CALLBACK_PATH, SSO_START_PATH } from '../../server/http/sso.ts';
+import { savePairedOidc } from '../../server/sso/settings.ts';
 import { databaseDeps, openTestDatabase, resetTestDatabase, TEST_SECRET } from '../db.ts';
 import { portOf } from '../helpers.ts';
 
@@ -326,5 +327,38 @@ describe('OIDC sign-in', () => {
       forwardAuth: false,
       publicView: false,
     });
+  });
+});
+
+describe('OIDC sign-in with no APP_URL', () => {
+  it('comes back to the address recorded when the provider was paired, not to localhost', async () => {
+    vi.unstubAllEnvs();
+    // A second homepage, built the way index.ts builds it: the host reads the pairing and its recorded address.
+    const outer = express();
+    const listening = await listen(outer);
+    try {
+      await savePairedOidc(database.db, {
+        issuer: provider.issuer,
+        clientId: CLIENT_ID,
+        clientSecret: CLIENT_SECRET,
+        clientAuth: 'client_secret_basic',
+        name: 'heautou',
+        registrationAccessToken: null,
+        registrationClientUri: null,
+        appUrl: listening.origin,
+      });
+      const authHost = await createAuthHost(database.db, { secret: TEST_SECRET });
+      expect(authHost.urls()).toMatchObject({ appUrl: listening.origin, source: 'PAIRED' });
+      const deps = await databaseDeps(database.db);
+      outer.use(createApp({ ...deps, authHost, dataDir: '/nonexistent' }));
+      appUrl = listening.origin;
+
+      const { location } = await signIn();
+      expect(location.origin + location.pathname).toBe(`${listening.origin}/auth/sso`);
+      const verified = await gql(VERIFY, { token: location.searchParams.get('token') ?? '' });
+      expect(verified.errors).toBeUndefined();
+    } finally {
+      await close(listening.server);
+    }
   });
 });

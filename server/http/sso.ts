@@ -2,7 +2,7 @@ import type { Express, Request, Response } from 'express';
 import type { AuthHost } from '../auth/auth-host.ts';
 import type { Auth } from '../auth/better-auth.ts';
 import { syncOidcGroups } from '../auth/groups.ts';
-import { appUrl, OIDC_PROVIDER_ID, serverUrl } from '../core/config.ts';
+import { OIDC_CALLBACK_PATH, OIDC_PROVIDER_ID, type SiteUrls } from '../core/config.ts';
 import { HttpStatus } from '../core/wire.ts';
 import type { Database } from '../db/client.ts';
 
@@ -18,7 +18,7 @@ import type { Database } from '../db/client.ts';
 /** Where the sign-in button sends the browser. */
 export const SSO_START_PATH = `/sso/${OIDC_PROVIDER_ID}`;
 /** Where the provider sends the browser back: better-auth's callback, at its default base path. */
-export const SSO_CALLBACK_PATH = `/api/auth/callback/${OIDC_PROVIDER_ID}`;
+export const SSO_CALLBACK_PATH = OIDC_CALLBACK_PATH;
 
 /** The app's page that spends the one-time token. */
 const SIGNED_IN_PATH = '/auth/sso';
@@ -44,18 +44,22 @@ type SsoError = (typeof SsoError)[keyof typeof SsoError];
  */
 export function mountSso(app: Express, host: AuthHost, db: Database): void {
   app.get(SSO_START_PATH, (req, res) => {
+    const urls = host.urls();
     if (host.oidc() === null) {
-      off(res);
+      off(res, urls);
       return;
     }
-    start(host.current(), req, res).catch((error: unknown) => fail(res, SsoError.SignInFailed, error));
+    start(host.current(), urls, req, res).catch((error: unknown) => fail(res, urls, SsoError.SignInFailed, error));
   });
   app.get(SSO_CALLBACK_PATH, (req, res) => {
+    const urls = host.urls();
     if (host.oidc() === null) {
-      off(res);
+      off(res, urls);
       return;
     }
-    callback(host.current(), db, req, res).catch((error: unknown) => fail(res, SsoError.CallbackFailed, error));
+    callback(host.current(), urls, db, req, res).catch((error: unknown) =>
+      fail(res, urls, SsoError.CallbackFailed, error),
+    );
   });
 }
 
@@ -83,15 +87,16 @@ function toHeaders(raw: Request['headers']): Headers {
  * PKCE verifier and the nonce, and says where the provider's authorize page is.
  *
  * @param auth - The current auth instance.
+ * @param urls - The addresses it was built with.
  * @param req - The browser's request.
  * @param res - Answered with a redirect to the provider.
  */
-async function start(auth: Auth, req: Request, res: Response): Promise<void> {
+async function start(auth: Auth, urls: SiteUrls, req: Request, res: Response): Promise<void> {
   const { headers, response } = await auth.api.signInSocial({
     body: {
       provider: OIDC_PROVIDER_ID,
-      callbackURL: `${appUrl()}${SIGNED_IN_PATH}`,
-      errorCallbackURL: `${appUrl()}${FAILED_PATH}`,
+      callbackURL: `${urls.appUrl}${SIGNED_IN_PATH}`,
+      errorCallbackURL: `${urls.appUrl}${FAILED_PATH}`,
       disableRedirect: true,
     },
     headers: toHeaders(req.headers),
@@ -113,12 +118,13 @@ async function start(auth: Auth, req: Request, res: Response): Promise<void> {
  * set for a one-time token on the app's URL.
  *
  * @param auth - The current auth instance.
+ * @param urls - The addresses it was built with.
  * @param db - The database.
  * @param req - The provider's redirect, as the browser followed it.
  * @param res - Answered with a redirect to the app.
  */
-async function callback(auth: Auth, db: Database, req: Request, res: Response): Promise<void> {
-  const request = new Request(new URL(req.originalUrl, serverUrl()), {
+async function callback(auth: Auth, urls: SiteUrls, db: Database, req: Request, res: Response): Promise<void> {
+  const request = new Request(new URL(req.originalUrl, urls.serverUrl), {
     method: 'GET',
     headers: toHeaders(req.headers),
   });
@@ -138,6 +144,7 @@ async function callback(auth: Auth, db: Database, req: Request, res: Response): 
   if (location === '') {
     fail(
       res,
+      urls,
       SsoError.CallbackFailed,
       new Error(`better-auth's callback answered ${response.status} with no redirect`),
     );
@@ -157,7 +164,7 @@ async function callback(auth: Auth, db: Database, req: Request, res: Response): 
     await syncOidcGroups(db, signedIn.user.id);
   }
   const { token } = await auth.api.generateOneTimeToken({ headers: bearer });
-  const target = new URL(location, appUrl());
+  const target = new URL(location, urls.appUrl);
   target.searchParams.set('token', token);
   res.redirect(HttpStatus.Found, target.toString());
 }
@@ -166,22 +173,24 @@ async function callback(auth: Auth, db: Database, req: Request, res: Response): 
  * Sends the browser back to the sign-in page, which says there is no provider to sign in with.
  *
  * @param res - Answered with the redirect.
+ * @param urls - Where the sign-in page is.
  */
-function off(res: Response): void {
-  res.redirect(HttpStatus.Found, `${appUrl()}${FAILED_PATH}?error=${SsoError.Off}`);
+function off(res: Response, urls: SiteUrls): void {
+  res.redirect(HttpStatus.Found, `${urls.appUrl}${FAILED_PATH}?error=${SsoError.Off}`);
 }
 
 /**
  * Logs a failure and sends the browser back to the sign-in page, which says that signing in failed.
  *
  * @param res - Answered with the redirect, unless something was already sent.
+ * @param urls - Where the sign-in page is.
  * @param code - What the sign-in page is told.
  * @param error - What went wrong, for the log.
  */
-function fail(res: Response, code: SsoError, error: unknown): void {
+function fail(res: Response, urls: SiteUrls, code: SsoError, error: unknown): void {
   console.error(`[auth] OIDC ${code}:`, error);
   if (res.headersSent) {
     return;
   }
-  res.redirect(HttpStatus.Found, `${appUrl()}${FAILED_PATH}?error=${encodeURIComponent(code)}`);
+  res.redirect(HttpStatus.Found, `${urls.appUrl}${FAILED_PATH}?error=${encodeURIComponent(code)}`);
 }

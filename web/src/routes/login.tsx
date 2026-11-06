@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { LogIn } from 'lucide-react';
-import { useAccess, useAuthConfig } from '@/auth/use-access';
+import { CallbackNotice } from '@/auth/callback-notice';
+import { useAccess, useAuthConfig, useSsoSetup } from '@/auth/use-access';
 import { CenteredLayout } from '@/components/centered-layout';
 import { QueryError } from '@/components/query-state';
 import { Alert } from '@/components/ui/alert';
@@ -42,6 +43,9 @@ function errorSentence(code: string): string {
 function LoginRoute() {
   const { error } = Route.useSearch();
   const config = useAuthConfig();
+  // Read here too: a pairing that registered the wrong callback is fixed from this page, since nobody
+  // can sign in to reach Settings.
+  const setup = useSsoSetup().data;
   const viewer = useAccess().data?.viewer ?? null;
   const notice =
     error === undefined ? null : (
@@ -86,6 +90,7 @@ function LoginRoute() {
       }
       contentSlot={
         <>
+          {setup === undefined ? null : <CallbackNotice setup={setup} />}
           {notice}
           {sso === null && forwardAuth ? (
             <p className="text-foreground/70 text-sm">

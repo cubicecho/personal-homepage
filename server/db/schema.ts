@@ -261,6 +261,9 @@ export const oidcSettings = pgTable(
     name: text('name').notNull(),
     registrationAccessToken: text('registration_access_token'),
     registrationClientUri: text('registration_client_uri'),
+    // The address people opened the homepage at when it was paired: where sign-ins come back to while
+    // APP_URL is unset. Null for a pairing made before it was recorded, or from this machine.
+    appUrl: text('app_url'),
     updatedAt: timestamp('updated_at', { withTimezone: true })
       .notNull()
       .defaultNow()

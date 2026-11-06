@@ -76,9 +76,16 @@ jobs:
           tags: ghcr.io/cubicecho/personal-homepage:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
+      # Settings reach the app through .env; PORT there must not move the app off the container's 3000.
+      - name: Write a .env
+        run: printf 'APP_URL=http://homepage.ci:3000\nPORT=3000\nDATA_DIR=./not-the-volume\n' > .env
       # --wait blocks until the app's healthcheck passes.
       - name: Start the stack
         run: docker compose up -d --no-build --wait --wait-timeout 180
+      - name: APP_URL from .env reaches the app
+        run: docker compose logs | grep -F 'callback address http://homepage.ci:3000/api/auth/callback/oidc'
+      - name: DATA_DIR stays the volume
+        run: docker compose logs | grep -F 'pages in /data/pg'
       - name: /healthz answers
         run: curl -fsS http://127.0.0.1:3000/healthz
       # The store seeds the home page into the volume on first boot.

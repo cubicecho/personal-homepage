@@ -7,6 +7,7 @@ import {
   SignOutDocument,
   SsoSetupDocument,
   UnpairSsoDocument,
+  UpdateSsoAppUrlDocument,
   VerifyOneTimeTokenDocument,
 } from '@/__generated__/graphql';
 import { request } from '@/core/gql';
@@ -70,14 +71,30 @@ function useRefreshEverything(): () => Promise<void> {
 }
 
 /**
- * Pairs the instance with the provider a setup URL names.
+ * Pairs the instance with the provider a setup URL names. The address this page is open at goes with it,
+ * so sign-ins come back here rather than to the server's own localhost.
  *
  * @returns The mutation, taking the pasted URL.
  */
 export function usePairSso() {
   const refresh = useRefreshEverything();
   return useMutation({
-    mutationFn: async (setupUrl: string) => (await request(PairSsoDocument, { setupUrl })).pairSso,
+    mutationFn: async (setupUrl: string) =>
+      (await request(PairSsoDocument, { setupUrl, appUrl: window.location.origin })).pairSso,
+    onSuccess: refresh,
+  });
+}
+
+/**
+ * Moves the paired provider's callback to the address this page is open at, and tells the provider.
+ *
+ * @returns The mutation. Its result says whether the provider took the change, and what to do if not.
+ */
+export function useUpdateSsoAppUrl() {
+  const refresh = useRefreshEverything();
+  return useMutation({
+    mutationFn: async () =>
+      (await request(UpdateSsoAppUrlDocument, { appUrl: window.location.origin })).updateSsoAppUrl,
     onSuccess: refresh,
   });
 }

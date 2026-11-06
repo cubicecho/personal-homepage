@@ -31,7 +31,8 @@ npm run db:import-yaml -- --data-dir examples/data --replace   # sample pages (s
   - `forward-auth.ts`: trusted proxies and their `Remote-*` identities. `groups.ts`: the OIDC groups claim.
   - `icon-links.ts`: signed favicon addresses. `rate-limit.ts`, `throttle.ts`, `admin.ts`.
 - `server/sso/`: pairing with a provider by setup URL (`pairing.ts`, RFC 7591/7592), where the provider comes from
-  (`settings.ts`), and `ssoSetup`/`pairSso`/`unpairSso` (`resolvers.ts`). `server/http/sso.ts` is the two OIDC legs.
+  (`settings.ts`), and `ssoSetup`/`pairSso`/`updateSsoAppUrl`/`unpairSso` (`resolvers.ts`). `reset-cli.ts` is
+  `npm run sso:reset`. `server/http/sso.ts` is the two OIDC legs.
 - `server/db/`:
   - `client.ts`: opens PGlite or Postgres, each with its own migrator and close.
   - `schema.ts`: the tables, pages and sign-in both. Migrations are generated into `drizzle/` and committed.
@@ -109,4 +110,7 @@ npm run db:import-yaml -- --data-dir examples/data --replace   # sample pages (s
   address, never X-Forwarded-For (`auth/forward-auth.ts`).
 - **Sign-in follows the cubicecho_backend `sso.md` pattern:** better-auth on the database, its endpoints as
   GraphQL, the two OIDC legs in `http/sso.ts`, the pairing in `sso/`, `AuthHost` rebuilt on (un)pairing.
+- **Every sign-in address comes from `authHost.urls()`** (`siteUrls` in `core/config.ts`: `APP_URL`, else the
+  address pairing recorded from the browser, else localhost). Don't build one from the environment directly: a
+  pairing made without `APP_URL` would register or redirect to localhost.
 - **No Storybook stories yet.** The UI was checked with scripted headless runs.

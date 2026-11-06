@@ -231,23 +231,92 @@ export const configuredAuthSecret = (): string | undefined => process.env.BETTER
  */
 export const authSecret = (): string => configuredAuthSecret() || DEV_SECRET;
 
-/**
- * Where people open the homepage: where the OIDC sign-in sends the browser back to.
- *
- * @returns `APP_URL` without a trailing slash, or this server's own localhost address.
- */
-export const appUrl = (): string => env('APP_URL').replace(/\/+$/, '') || `http://localhost:${port()}`;
-
-/**
- * Where a browser reaches this server: where the OIDC sign-in's start and callback live. The same as
- * `APP_URL` unless the app is served from somewhere else.
- *
- * @returns `SERVER_URL` without a trailing slash, or `appUrl()`.
- */
-export const serverUrl = (): string => env('SERVER_URL').replace(/\/+$/, '') || appUrl();
-
 /** The id the OIDC provider is registered under in better-auth, and so the last part of its callback path. */
 export const OIDC_PROVIDER_ID = 'oidc';
+/** Where better-auth's OIDC callback is served, under the server's address. */
+export const OIDC_CALLBACK_PATH = `/api/auth/callback/${OIDC_PROVIDER_ID}`;
+
+/** Where the address people open the homepage at came from. The GraphQL enum `AppUrlSource` has the same values. */
+export const AppUrlSource = {
+  /** `APP_URL` in the environment. */
+  Env: 'ENV',
+  /** Recorded from the browser when the provider was paired. */
+  Paired: 'PAIRED',
+  /** Neither: this server's own localhost address, right only when the browser runs on the same machine. */
+  Fallback: 'FALLBACK',
+} as const;
+/** One of the values in `AppUrlSource`. */
+export type AppUrlSource = (typeof AppUrlSource)[keyof typeof AppUrlSource];
+
+/** The addresses an OIDC sign-in uses. */
+export interface SiteUrls {
+  /** Where people open the homepage: where a sign-in lands. */
+  appUrl: string;
+  /** Where the OIDC start and callback are served: `SERVER_URL`, or `appUrl`. */
+  serverUrl: string;
+  /** The callback registered with the provider. */
+  redirectUri: string;
+  /** Where `appUrl` came from. */
+  source: AppUrlSource;
+}
+
+/**
+ * Reads `APP_URL`.
+ *
+ * @returns It without a trailing slash, or null when unset or blank.
+ */
+export const configuredAppUrl = (): string | null => {
+  const value = env('APP_URL').replace(/\/+$/, '');
+  return value === '' ? null : value;
+};
+
+/**
+ * Decides the addresses an OIDC sign-in uses: `APP_URL` when set, otherwise the address recorded when the
+ * provider was paired, otherwise this server's own localhost address.
+ *
+ * @param recordedAppUrl - The address pairing recorded, or null.
+ * @returns The addresses, and which source the app's address came from.
+ */
+export function siteUrls(recordedAppUrl: string | null): SiteUrls {
+  const configured = configuredAppUrl();
+  const appUrl = configured ?? recordedAppUrl ?? `http://localhost:${port()}`;
+  const recordedSource = recordedAppUrl === null ? AppUrlSource.Fallback : AppUrlSource.Paired;
+  const source = configured === null ? recordedSource : AppUrlSource.Env;
+  const serverUrl = env('SERVER_URL').replace(/\/+$/, '') || appUrl;
+  return { appUrl, serverUrl, redirectUri: `${serverUrl}${OIDC_CALLBACK_PATH}`, source };
+}
+
+/**
+ * Reads a browser's origin, as the web app or an `Origin` header sends it.
+ *
+ * @param value - The address.
+ * @returns Its origin (`http(s)://host[:port]`), or null when it is not an http(s) URL, or carries a path,
+ * query, fragment or credentials.
+ */
+export function originOf(value: string): string | null {
+  const trimmed = value.trim().replace(/\/+$/, '');
+  if (URL.canParse(trimmed) === false) {
+    return null;
+  }
+  const url = new URL(trimmed);
+  const isWeb = url.protocol === 'http:' || url.protocol === 'https:';
+  const isBare = url.pathname === '/' && url.search === '' && url.hash === '' && url.username === '';
+  return isWeb && isBare ? url.origin : null;
+}
+
+/** Host names that always mean this machine. */
+const LOOPBACK_NAME = /^(localhost|.+\.localhost)$/i;
+
+/**
+ * Checks whether a host only works from the machine it runs on.
+ *
+ * @param host - A host name or IP address: IPv6 with or without brackets, or IPv4-mapped.
+ * @returns True for localhost, 127.0.0.0/8 and ::1.
+ */
+export function isLoopbackHost(host: string): boolean {
+  const bare = host.replace(/^\[|\]$/g, '').replace(/^::ffff:/i, '');
+  return LOOPBACK_NAME.test(bare) || bare.startsWith('127.') || bare === '::1';
+}
 /** The `OIDC_CLIENT_AUTH` values a provider can expect. */
 export const OIDC_CLIENT_AUTH_METHODS = ['client_secret_basic', 'client_secret_post'] as const;
 
@@ -285,13 +354,6 @@ export function oidcConfig(): OidcConfig | null {
     name: env('OIDC_NAME') || AUTH_DEFAULTS.oidcName,
   };
 }
-
-/**
- * Names the address to register with an OIDC provider as this client's redirect URI.
- *
- * @returns better-auth's callback for the provider, under `serverUrl()`.
- */
-export const oidcRedirectUri = (): string => `${serverUrl()}/api/auth/callback/${OIDC_PROVIDER_ID}`;
 
 /**
  * The ID token claim groups are read from.

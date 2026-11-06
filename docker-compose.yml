@@ -1,6 +1,10 @@
-# The homepage, with its built-in database in a named volume (.env is read from beside this file):
+# The homepage, with its built-in database in a named volume:
 #
 #   docker compose up -d --build
+#
+# Settings go in .env beside this file (copy .env.example): every variable in it is passed to the app,
+# APP_URL above all. After changing .env, run `docker compose up -d` again so the container is recreated
+# with it; a restart alone keeps the old values.
 #
 # A bind mount (./data:/data) works too; the directory must be writable by uid 1000, the image's node user.
 # To keep pages in Postgres instead, uncomment the postgres service, DATABASE_URL and depends_on below.
@@ -10,16 +14,24 @@ services:
     image: ghcr.io/cubicecho/personal-homepage:latest
     build: .
     restart: unless-stopped
+    # Every variable in .env reaches the app. Missing is fine (Compose 2.24 or later).
+    env_file:
+      - path: .env
+        required: false
+    # These win over .env: inside the container the app always listens on 3000 (PORT in .env picks the
+    # host's side of the mapping below) and keeps its data in the volume.
     environment:
-      TRUST_PROXY: ${TRUST_PROXY:-false}
       NODE_ENV: production
+      PORT: 3000
+      DATA_DIR: /data
       # DATABASE_URL: postgres://homepage:${POSTGRES_PASSWORD:-homepage}@postgres:5432/homepage
       # Discovery (Settings, Discovered apps). Dockhand finds containers on every host it manages:
       # DOCKHAND_URL: http://dockhand.lan:3000
       # DOCKHAND_TOKEN: ${DOCKHAND_TOKEN}
       # With the Docker socket mounted below, the name other devices reach this host by:
       # DISCOVERY_DOCKER_HOST: nas.lan
-    # mDNS discovery needs host networking: uncomment this and remove `ports:` (the app listens on PORT on the host).
+    # mDNS discovery needs host networking: uncomment this and remove `ports:`. The app then listens on the
+    # host's port 3000; to use another, change PORT under `environment` above (.env's PORT has no effect here).
     # network_mode: host
     # depends_on:
     #   postgres: { condition: service_healthy }

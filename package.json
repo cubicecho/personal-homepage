@@ -21,7 +21,8 @@
     "test": "vitest run",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "db:import-yaml": "node --env-file-if-exists=.env server/db/import-yaml-cli.ts"
+    "db:import-yaml": "node --env-file-if-exists=.env server/db/import-yaml-cli.ts",
+    "sso:reset": "node --env-file-if-exists=.env server/sso/reset-cli.ts"
   },
   "dependencies": {
     "@cubicecho/graphql-better-auth": "^1.1.0",

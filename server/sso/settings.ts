@@ -1,10 +1,14 @@
-import { type OidcConfig, oidcConfig } from '../core/config.ts';
+import { eq } from 'drizzle-orm';
+import { type OidcConfig, oidcConfig, type SiteUrls, siteUrls } from '../core/config.ts';
 import type { Database } from '../db/client.ts';
 import { oidcSettings } from '../db/schema.ts';
 
 // The OIDC provider the instance signs in with comes from one of two places: the environment
 // (OIDC_ISSUER), or a pairing made by pasting a setup URL (pairing.ts), kept in the `oidc_settings` row.
 // The environment wins, so a deployment that pins its provider cannot be re-paired from the app.
+//
+// The pairing also records the address people opened the homepage at, which is where sign-ins come back
+// to while APP_URL is unset (`siteUrls` in core/config.ts).
 
 /** Where the provider in use came from. The GraphQL enum `SsoSource` has the same values. */
 export const SsoSource = {
@@ -22,9 +26,18 @@ export interface PairedOidc {
   clientSecret: string | null;
   clientAuth: OidcConfig['clientAuth'];
   name: string;
-  /** RFC 7592: the credential that deletes the client at the provider. */
+  /** RFC 7592: the credential that updates or deletes the client at the provider. */
   registrationAccessToken: string | null;
   registrationClientUri: string | null;
+  /** The address the homepage was opened at when it was paired, or null when none was recorded. */
+  appUrl: string | null;
+}
+
+/** What sign-in uses now: the provider, where it came from, and the addresses it signs in at. */
+export interface EffectiveOidc {
+  config: OidcConfig | null;
+  source: SsoSource;
+  urls: SiteUrls;
 }
 
 /**
@@ -46,6 +59,7 @@ export async function readPairedOidc(db: Database): Promise<PairedOidc | null> {
     name: row.name,
     registrationAccessToken: row.registrationAccessToken,
     registrationClientUri: row.registrationClientUri,
+    appUrl: row.appUrl,
   };
 }
 
@@ -63,6 +77,19 @@ export async function savePairedOidc(db: Database, paired: PairedOidc): Promise<
 }
 
 /**
+ * Changes what the pairing row says about the client's addresses, after the provider was told (or not).
+ *
+ * @param db - The database.
+ * @param change - The recorded address, and the registration access token when the provider rotated it.
+ */
+export async function updatePairedOidc(
+  db: Database,
+  change: Pick<PairedOidc, 'appUrl'> & Partial<Pick<PairedOidc, 'registrationAccessToken'>>,
+): Promise<void> {
+  await db.update(oidcSettings).set(change).where(eq(oidcSettings.id, 'oidc'));
+}
+
+/**
  * Forgets the pairing.
  *
  * @param db - The database.
@@ -72,19 +99,21 @@ export async function clearPairedOidc(db: Database): Promise<void> {
 }
 
 /**
- * Reads the provider sign-in uses and where it came from.
+ * Reads the provider sign-in uses, where it came from, and the addresses it signs in at.
  *
  * @param db - The database.
- * @returns The environment's provider when OIDC_ISSUER is set, otherwise the pairing, otherwise none.
+ * @returns The environment's provider when OIDC_ISSUER is set, otherwise the pairing, otherwise none; and
+ * the addresses from APP_URL, otherwise the pairing's recorded address, otherwise localhost.
  */
-export async function effectiveOidc(db: Database): Promise<{ config: OidcConfig | null; source: SsoSource }> {
+export async function effectiveOidc(db: Database): Promise<EffectiveOidc> {
   const env = oidcConfig();
-  if (env !== null) {
-    return { config: env, source: SsoSource.Env };
-  }
   const paired = await readPairedOidc(db);
+  const urls = siteUrls(paired?.appUrl ?? null);
+  if (env !== null) {
+    return { config: env, source: SsoSource.Env, urls };
+  }
   if (paired === null) {
-    return { config: null, source: SsoSource.None };
+    return { config: null, source: SsoSource.None, urls };
   }
   return {
     config: {
@@ -95,5 +124,6 @@ export async function effectiveOidc(db: Database): Promise<{ config: OidcConfig 
       name: paired.name,
     },
     source: SsoSource.Paired,
+    urls,
   };
 }
