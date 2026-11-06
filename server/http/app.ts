@@ -43,7 +43,7 @@ export function createApp({ dataDir, dist, ...deps }: AppDeps): Express {
     status: deps.status ?? createStatusChecker(),
     frames: deps.frames ?? createFrameChecker(),
     icons: deps.icons ?? createIconService(),
-    site: deps.site ?? createSiteSettings(),
+    site: deps.site ?? createSiteSettings({ dataDir }),
   };
   const yoga = createYoga<Record<string, never>, Context>({
     schema,
