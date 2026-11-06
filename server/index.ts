@@ -15,7 +15,6 @@ import {
 } from './core/config.ts';
 import { errorMessage } from './core/errors.ts';
 import { openDatabase } from './db/client.ts';
-import { importYamlOnBoot } from './db/import-yaml.ts';
 import { waitForDatabase } from './db/wait.ts';
 import { createConfiguredDiscovery } from './discovery/setup.ts';
 import { createApp, WEB_DIST } from './http/app.ts';
@@ -58,7 +57,7 @@ function logSignIn(authHost: AuthHost): void {
 }
 
 /**
- * Opens and migrates the database, and moves in any YAML pages left by 1.x.
+ * Opens and migrates the database.
  *
  * @returns The opened database.
  */
@@ -86,7 +85,6 @@ try {
 
 const { db } = database;
 const pages = await createDbPageStore(db);
-await importYamlOnBoot(db, dataDir());
 const site = createSiteSettings(db);
 // Built after migrate: it reads the OIDC pairing from the database.
 const secret = resolveAuthSecret(dataDir());
