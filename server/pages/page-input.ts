@@ -1,11 +1,10 @@
 // Validation for what the API is sent. It sits above the store, so any store gets checked input.
 import { z } from 'zod';
-import { PAGE_LIMIT_DEFAULTS } from '../core/defaults.ts';
+import { LAYOUT_DEFAULTS, PAGE_LIMIT_DEFAULTS } from '../core/defaults.ts';
 import { badInput } from '../core/errors.ts';
 import {
   BUILT_IN_ICONS,
-  ColumnSpan,
-  DEFAULT_COLUMN_SPAN,
+  DEFAULT_ITEM_WIDTH,
   type IconRef,
   type ItemFields,
   ItemKind,
@@ -147,7 +146,8 @@ const itemSchema = z.object({
   visibleTo: visibleTo.nullish(),
   description: z.string().trim().max(maxDescriptionLength).nullish(),
   frameHeightPx: z.int().min(minFrameHeightPx).max(maxFrameHeightPx).nullish(),
-  columnSpan: z.enum(Object.values(ColumnSpan)).nullish(),
+  columnSpan: z.int().min(LAYOUT_DEFAULTS.minColumns).max(LAYOUT_DEFAULTS.maxColumns).nullish(),
+  fullWidth: z.boolean().nullish(),
   checkEnabled: z.boolean().nullish(),
   checkUrl: z
     .string()
@@ -302,7 +302,8 @@ export function parseItemFields(input: unknown): ItemFields {
     icon: parsed.icon,
     description: blankToNull(parsed.description),
     frameHeightPx: isFrame ? (parsed.frameHeightPx ?? defaultFrameHeightPx) : null,
-    columnSpan: isLink ? ColumnSpan.One : (parsed.columnSpan ?? DEFAULT_COLUMN_SPAN[parsed.kind]),
+    columnSpan: isLink ? 1 : (parsed.columnSpan ?? DEFAULT_ITEM_WIDTH[parsed.kind].columnSpan),
+    fullWidth: isLink ? false : (parsed.fullWidth ?? DEFAULT_ITEM_WIDTH[parsed.kind].fullWidth),
     check: { enabled: parsed.checkEnabled ?? isWidget === false, url: blankToNull(parsed.checkUrl) },
     widget: isWidget && widgetInput !== null ? widgetFromInput(widgetInput) : null,
     visibleTo: parsed.visibleTo ?? [],

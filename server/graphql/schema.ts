@@ -5,7 +5,7 @@ import { applyBetterAuthExtension } from '../auth/endpoints.ts';
 import { signIconPath } from '../auth/icon-links.ts';
 import { applyAuthExtension } from '../auth/resolvers.ts';
 import type { Context } from '../core/context.ts';
-import { ICON_DEFAULTS, PAGE_LIMIT_DEFAULTS, type PageLimitSettings } from '../core/defaults.ts';
+import { ICON_DEFAULTS, type LayoutSettings, PAGE_LIMIT_DEFAULTS, type PageLimitSettings } from '../core/defaults.ts';
 import { badInput, notFound } from '../core/errors.ts';
 import type { Database } from '../db/client.ts';
 import type { FrameCheckResult } from '../frames/frame-check.ts';
@@ -206,6 +206,18 @@ const resolvers = {
       return ctx.site.searchEngines();
     },
     /**
+     * Resolves `Query.siteLayout`.
+     *
+     * @param _parent - Unused.
+     * @param _args - Unused.
+     * @param ctx - Request context.
+     * @returns How a section's grid is laid out.
+     */
+    siteLayout: (_parent: unknown, _args: unknown, ctx: Context): Promise<LayoutSettings> => {
+      requireView(ctx.access);
+      return ctx.site.layout();
+    },
+    /**
      * Resolves `Query.widgetData`.
      *
      * @param _parent - Unused.
@@ -325,6 +337,16 @@ const resolvers = {
      */
     setSearchEngines: (_parent: unknown, args: { input?: unknown }, ctx: Context): Promise<SearchEngine[]> =>
       ctx.site.setSearch(args.input ?? null),
+    /**
+     * Resolves `Mutation.setLayoutColumns`.
+     *
+     * @param _parent - Unused.
+     * @param args - The column count, or null for the default.
+     * @param ctx - Request context.
+     * @returns The layout now in use.
+     */
+    setLayoutColumns: (_parent: unknown, args: { columns?: number | null }, ctx: Context): Promise<LayoutSettings> =>
+      ctx.site.setLayoutColumns(args.columns ?? null),
     /**
      * Resolves `Mutation.createPage`.
      *

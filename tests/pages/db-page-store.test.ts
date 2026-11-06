@@ -1,10 +1,11 @@
+import { readFile } from 'node:fs/promises';
 import { sql } from 'drizzle-orm';
 import { PAGE_LIMIT_DEFAULTS } from '../../server/core/defaults.ts';
 import { ErrorCode } from '../../server/core/errors.ts';
 import type { OpenedDatabase } from '../../server/db/client.ts';
 import { discoveredApps, items, pages } from '../../server/db/schema.ts';
 import { createDbPageStore } from '../../server/pages/db-page-store.ts';
-import { ColumnSpan, HOME_SLUG, ItemKind, itemsOf, OpensIn, type PageStore } from '../../server/pages/page.ts';
+import { HOME_SLUG, ItemKind, itemsOf, OpensIn, type PageStore } from '../../server/pages/page.ts';
 import { parseWidget } from '../../server/pages/page-input.ts';
 import { HttpMethod, ValueFormat, WeatherUnits, type Widget, WidgetType } from '../../server/pages/widget.ts';
 import { openTestDatabase, resetTestDatabase } from '../db.ts';
@@ -170,7 +171,8 @@ describe('database page store', () => {
       icon: null,
       description: null,
       frameHeightPx: PAGE_LIMIT_DEFAULTS.defaultFrameHeightPx,
-      columnSpan: ColumnSpan.Full,
+      columnSpan: 2,
+      fullWidth: true,
       check: { enabled: false, url: null },
       widget: null,
       visibleTo: [],
@@ -318,16 +320,67 @@ describe('database page store', () => {
     await store.addItem(
       HOME_SLUG,
       null,
-      linkFields('Wide', { kind: ItemKind.Frame, opensIn: null, columnSpan: ColumnSpan.Two }),
+      linkFields('Wide', { kind: ItemKind.Frame, opensIn: null, columnSpan: 7, fullWidth: false }),
     );
     await store.addItem(HOME_SLUG, null, linkFields('Old', { kind: ItemKind.Frame, opensIn: null }));
-    await database.db.execute(sql`update items set column_span = null where id = 'old'`);
+    await database.db.execute(sql`update items set column_span = null, full_width = null where id = 'old'`);
     const page = await store.find(HOME_SLUG);
-    expect(page === null ? [] : itemsOf(page).map((item) => item.columnSpan)).toEqual([
-      ColumnSpan.Two,
-      ColumnSpan.Full,
+    expect(page === null ? [] : itemsOf(page).map(({ columnSpan, fullWidth }) => ({ columnSpan, fullWidth }))).toEqual([
+      { columnSpan: 7, fullWidth: false },
+      { columnSpan: 2, fullWidth: true },
     ]);
-    await expect(database.db.execute(sql`update items set column_span = 'FIVE' where id = 'wide'`)).rejects.toThrow();
+    await expect(database.db.execute(sql`update items set column_span = 9 where id = 'wide'`)).rejects.toThrow();
+  });
+
+  it('turns the old ONE…FOUR and FULL spans into columns and a full-width flag', async () => {
+    // Put the items table back in its old shape, write rows in it, then run the width migration's
+    // statements for items. They leave the table as the other tests expect it.
+    await database.db.execute(sql`alter table items drop constraint ck_items_column_span`);
+    await database.db.execute(sql`alter table items drop column full_width`);
+    await database.db.execute(sql`alter table items alter column column_span type text`);
+    await database.db.execute(
+      sql`alter table items add constraint ck_items_column_span check (column_span in ('ONE', 'TWO', 'THREE', 'FOUR', 'FULL'))`,
+    );
+    const rows = [
+      ['one', 'ONE'],
+      ['four', 'FOUR'],
+      ['full', 'FULL'],
+      ['unset', null],
+    ] as const;
+    for (const [position, [id, span]] of rows.entries()) {
+      await database.db.execute(
+        sql`insert into items (page_slug, section_id, id, kind, title, url, column_span, check_enabled, position)
+            values ('home', 'main', ${id}, 'FRAME', ${id}, 'http://nas.local', ${span}, false, ${position})`,
+      );
+    }
+    const migration = await readFile(
+      new URL('../../drizzle/20261106072433_item_width_and_layout_columns/migration.sql', import.meta.url),
+      'utf-8',
+    );
+    for (const statement of migration.split('--> statement-breakpoint')) {
+      const isItemsStatement = statement.includes('"items"');
+      if (isItemsStatement) {
+        await database.db.execute(sql.raw(statement));
+      }
+    }
+    const converted = await database.db
+      .select({ id: items.id, columnSpan: items.columnSpan, fullWidth: items.fullWidth })
+      .from(items)
+      .orderBy(items.id);
+    expect(converted).toEqual([
+      { id: 'four', columnSpan: 4, fullWidth: false },
+      { id: 'full', columnSpan: null, fullWidth: true },
+      { id: 'one', columnSpan: 1, fullWidth: false },
+      { id: 'unset', columnSpan: null, fullWidth: null },
+    ]);
+    expect(
+      itemsOf(await mustFind(HOME_SLUG)).map(({ id, columnSpan, fullWidth }) => [id, columnSpan, fullWidth]),
+    ).toEqual([
+      ['one', 1, false],
+      ['four', 4, false],
+      ['full', 2, true],
+      ['unset', 2, true],
+    ]);
   });
 
   it('keeps a stored item kind the schema allows, and nothing else', async () => {
