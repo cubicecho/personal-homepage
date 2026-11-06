@@ -74,6 +74,7 @@ function onSite(path: string): Candidate {
     url: `${site.base}${path}`,
     probeUrl: null,
     fallbackName: path,
+    nameHints: [],
     explicit: { name: null, description: null, icon: null },
     metadata: {},
   };

@@ -38,6 +38,7 @@ describe('mdnsCandidate', () => {
     });
     // The username and password some devices announce are never kept.
     expect(candidate?.metadata.txt).toEqual({ path: '/web/', vendor: 'Synology' });
+    expect(candidate?.nameHints).toEqual([]);
   });
 
   it('reads Home Assistant’s internal_url and a printer’s adminurl, and skips a printer without one', () => {
@@ -45,6 +46,8 @@ describe('mdnsCandidate', () => {
       service({ type: 'home-assistant', port: 8123, txt: { internal_url: 'http://homeassistant.local:8123' } }),
     );
     expect(assistant?.url).toBe('http://homeassistant.local:8123');
+    // An app's own service type names it; a generic one says nothing.
+    expect(assistant?.nameHints).toEqual(['home-assistant']);
     const printer = mdnsCandidate(service({ type: 'ipp', port: 631, txt: { adminurl: 'http://printer.local/' } }));
     expect(printer?.url).toBe('http://printer.local/');
     expect(mdnsCandidate(service({ type: 'ipp', port: 631, txt: {} }))).toBeNull();

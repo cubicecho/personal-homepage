@@ -25,6 +25,11 @@ export interface Description {
   url: string;
   /** The app's name, or null when the page names none. */
   title: string | null;
+  /**
+   * Every name the page and its manifest give the app, best first (manifest name and short name, the
+   * application name, the site name, the title), for finding its icon. Empty when the page couldn't be read.
+   */
+  names: string[];
   description: string | null;
   /** An image address from the manifest or the page, `favicon` when the page links none, or null when it couldn't be read. */
   icon: IconRef | null;
@@ -422,7 +427,14 @@ export function createDescriber(deps: DescriberDeps = {}, overrides: Partial<Dis
    * @returns The description.
    */
   const describeNow = async (url: string, options: DescribeOptions): Promise<Description> => {
-    const failed = (problem: string): Description => ({ url, title: null, description: null, icon: null, problem });
+    const failed = (problem: string): Description => ({
+      url,
+      title: null,
+      names: [],
+      description: null,
+      icon: null,
+      problem,
+    });
     if (isWebUrl(url) === false) {
       return failed('Only http:// and https:// addresses can be described.');
     }
@@ -461,12 +473,12 @@ export function createDescriber(deps: DescriberDeps = {}, overrides: Partial<Dis
         ? new URL(manifestIcon.src, found.url).href
         : null;
     const pageIcon = iconLinks(html, page.url)[0] ?? null;
+    const named = [manifest?.name, manifest?.short_name, head.applicationName, head.siteName, head.title];
+    const names = [...new Set(named.map((name) => (name ?? '').trim()).filter((name) => name !== ''))];
     return {
       url,
-      title: clip(
-        manifest?.name ?? manifest?.short_name ?? head.applicationName ?? head.siteName ?? head.title,
-        maxTitleLength,
-      ),
+      title: clip(names[0] ?? null, maxTitleLength),
+      names,
       description: clip(manifest?.description ?? head.description, maxDescriptionLength),
       icon: usableIcon(manifestIconUrl) ?? usableIcon(pageIcon) ?? FAVICON_ICON,
       problem: null,

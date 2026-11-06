@@ -56,8 +56,18 @@ describe('containerCandidate', () => {
       sourceKey: 'docker:local:jellyfin',
       url: 'http://nas.lan:18096/',
       fallbackName: 'jellyfin',
+      nameHints: ['jellyfin', 'jellyfin', 'jellyfin'],
       explicit: { name: 'Jellyfin', description: 'Media', icon: 'di:jellyfin' },
     });
+  });
+
+  it('gives the container’s name and its image’s names as hints for matching an icon', () => {
+    const ports = [{ PrivatePort: 5006, PublicPort: 5006, Type: 'tcp' }];
+    const budget = containerCandidate(
+      { name: 'budget', image: 'ghcr.io/actualbudget/actual-server:latest', labels: {}, ports },
+      HOST,
+    );
+    expect(budget?.nameHints).toEqual(['budget', 'actual-server', 'actualbudget']);
   });
 
   it('uses https for an https port and a homepage.href label over the port', () => {
