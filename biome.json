@@ -12,6 +12,7 @@
       "**",
       "!**/dist",
       "!**/__generated__",
+      "!drizzle",
       "!**/*.gen.ts",
       "!**/storybook-static",
       "!tests/fixtures",

@@ -1,6 +1,6 @@
 // Getters, not constants, so a test sees the current environment.
 import { createRequire } from 'node:module';
-import { HTTP_DEFAULTS, STORE_DEFAULTS } from './defaults.ts';
+import { DATABASE_DEFAULTS, HTTP_DEFAULTS, STORE_DEFAULTS } from './defaults.ts';
 
 const NODE_ENV_PRODUCTION = 'production';
 /** The TRUST_PROXY value that trusts no hop. */
@@ -36,8 +36,40 @@ export const port = (): number => envNumber(process.env.PORT, HTTP_DEFAULTS.port
  */
 export const isProduction = (): boolean => process.env.NODE_ENV === NODE_ENV_PRODUCTION;
 
+/** What DATABASE_URL must look like when it is set: a Postgres connection URL. */
+export const POSTGRES_URL = /^postgres(ql)?:\/\//;
+
 /**
- * The directory the YAML store reads and writes.
+ * The Postgres server to keep pages in.
+ *
+ * @returns `DATABASE_URL`, trimmed; an empty string when unset, which means the built-in database under DATA_DIR.
+ */
+export const databaseUrl = (): string => (process.env.DATABASE_URL ?? '').trim();
+
+/**
+ * Checks a DATABASE_URL before anything connects with it.
+ *
+ * @param url - The value, trimmed.
+ * @returns What is wrong with it, as a sentence that says how to fix it; null when it is empty or a postgres:// URL.
+ */
+export function databaseUrlProblem(url: string): string | null {
+  const isUsable = url === '' || (POSTGRES_URL.test(url) && URL.canParse(url) && new URL(url).host !== '');
+  if (isUsable) {
+    return null;
+  }
+  return `DATABASE_URL must be a postgres:// URL, such as postgres://homepage:secret@postgres:5432/homepage. Leave it unset to keep pages in the built-in database under DATA_DIR.`;
+}
+
+/**
+ * How long boot waits for Postgres before exiting.
+ *
+ * @returns `DB_CONNECT_TIMEOUT_MS`, or `DATABASE_DEFAULTS.connectTimeoutMs`, in milliseconds.
+ */
+export const dbConnectTimeoutMs = (): number =>
+  envNumber(process.env.DB_CONNECT_TIMEOUT_MS, DATABASE_DEFAULTS.connectTimeoutMs);
+
+/**
+ * The directory the server writes to: the built-in database and the icon caches.
  *
  * @returns `DATA_DIR`, or `STORE_DEFAULTS.dataDir` when unset or blank.
  */

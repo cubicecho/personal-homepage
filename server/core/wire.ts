@@ -4,6 +4,7 @@ export const HttpStatus = {
   NotModified: 304,
   NotFound: 404,
   PayloadTooLarge: 413,
+  ServiceUnavailable: 503,
 } as const;
 export type HttpStatus = (typeof HttpStatus)[keyof typeof HttpStatus];
 
