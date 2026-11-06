@@ -1,3 +1,10 @@
+## [3.1.1](https://github.com/cubicecho/personal-homepage/compare/v3.1.0...v3.1.1) (2026-11-06)
+
+
+### Bug Fixes
+
+* **discovery:** say what went wrong when Dockhand or the Docker socket can't be read ([bcbd626](https://github.com/cubicecho/personal-homepage/commit/bcbd626a9d36c079cb8f82dda099ab8cbba8481b))
+
 # [3.1.0](https://github.com/cubicecho/personal-homepage/compare/v3.0.1...v3.1.0) (2026-11-06)
 
 

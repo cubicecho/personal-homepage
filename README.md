@@ -227,6 +227,19 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
 ```
 
+**When a name points at the container itself.** Some hosts list their own name against a loopback address in
+`/etc/hosts` (`127.0.1.1 framework.lan`). Inside the container, that name then reaches the homepage instead of the
+host. Dockhand's card says so when it happens ("…answered with this homepage's own page…"). The same wrong address
+breaks status checks, favicons, frame checks, widgets and **Fill in** for anything on that host. Tell the container
+where the name really is:
+
+```yaml
+extra_hosts:
+  - "framework.lan:host-gateway" # or the host's LAN IP, e.g. "framework.lan:192.168.1.20"
+```
+
+Using the IP address in `DOCKHAND_URL` works too, but only fixes Dockhand.
+
 ## Bookmarklet
 
 **Settings → Bookmarklet** has an **Add to homepage** button to drag to your browser's bookmarks bar. Click
