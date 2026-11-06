@@ -14,10 +14,19 @@ services:
       TRUST_PROXY: ${TRUST_PROXY:-false}
       NODE_ENV: production
       # DATABASE_URL: postgres://homepage:${POSTGRES_PASSWORD:-homepage}@postgres:5432/homepage
+      # Discovery (Settings, Discovered apps). Dockhand finds containers on every host it manages:
+      # DOCKHAND_URL: http://dockhand.lan:3000
+      # DOCKHAND_TOKEN: ${DOCKHAND_TOKEN}
+      # With the Docker socket mounted below, the name other devices reach this host by:
+      # DISCOVERY_DOCKER_HOST: nas.lan
+    # mDNS discovery needs host networking: uncomment this and remove `ports:` (the app listens on PORT on the host).
+    # network_mode: host
     # depends_on:
     #   postgres: { condition: service_healthy }
     volumes:
       - homepage_data:/data
+      # To find this host's containers without Dockhand:
+      # - /var/run/docker.sock:/var/run/docker.sock:ro
     ports:
       - "${PORT:-3000}:3000"
 

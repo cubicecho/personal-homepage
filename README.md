@@ -188,6 +188,60 @@ nothing is proxied.
 - **Use addresses that work from every device you'll open the homepage on.** `http://localhost:8096` means a
   different machine on your phone.
 
+## Discovery
+
+The server looks for apps on your network and lists them under **Settings → Discovered apps**. They are suggestions:
+nothing appears on a page until you add it.
+
+- **To add one,** use **Add to page…** in its menu, or choose **Discovered app** at the top of the Add item dialog.
+  The dialog fills in the name, address, icon and description, and you can change any of them.
+- **An added item is an ordinary item.** It remembers which app it came from, so the list can say "On Media"; editing
+  it never changes the app. **Unlink** in the item's dialog forgets that.
+- **Dismiss** hides an app from the list. **Show dismissed** brings it back.
+- **Enter manually** has a **Fill in from this address** button, which reads the same details from any address
+  you type.
+
+Apps are found in three places:
+
+| Source            | Finds                                                                                                                                                   | Set it up                                                                                                                                            |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **mDNS**          | Anything that announces a web page on your network: `_http`/`_https` services (with their `path`), Home Assistant, OctoPrint, and printers' admin pages | On by default. Multicast doesn't cross Docker's default network, so run the container with `network_mode: host`. `DISCOVERY_MDNS=false` turns it off |
+| **Dockhand**      | Running containers on every host [Dockhand](https://dockhand.pro) manages, at each host's public address and published port                             | `DOCKHAND_URL` and `DOCKHAND_TOKEN` (an API token, `dh_…`, from Dockhand)                                                                            |
+| **Docker socket** | Running containers on this host                                                                                                                         | Mount `/var/run/docker.sock` read-only (or set `DOCKER_SOCKET`), and set `DISCOVERY_DOCKER_HOST` to the name other devices reach this host by        |
+
+**How a found app gets its details:**
+
+- Containers with [Homepage's labels](https://gethomepage.dev/configs/docker/) (`homepage.name`, `homepage.href`,
+  `homepage.description`, `homepage.icon`) use them. `homepage.hide=true` keeps a container out.
+- Everything else is described from its own page. The server reads the page's
+  [web manifest](https://developer.mozilla.org/docs/Web/Manifest) for the name, description and icon, which most
+  self-hosted apps ship so they can be installed on a phone.
+- Without a manifest, it uses the page's title, description and icon links, and then its favicon.
+- **Rescan** on the page asks every source again. Otherwise Dockhand and the socket are asked every 5 minutes,
+  and mDNS is watched all the time.
+
+**Security:**
+
+- Anyone on your network can announce a service, so found apps are only ever suggestions.
+- The server fetches a found address only when it resolves to a private address. It follows redirects only on
+  the same host, and every request has a time and size limit.
+- Once sign-in is set up, the Discovered apps section, rescanning and Fill in are for editors only, since the
+  list maps your network.
+
+```yaml
+services:
+  personal-homepage:
+    image: ghcr.io/cubicecho/personal-homepage:latest
+    network_mode: host # for mDNS; drop `ports:`, the app listens on PORT on the host
+    environment:
+      DOCKHAND_URL: http://dockhand.lan:3000
+      DOCKHAND_TOKEN: ${DOCKHAND_TOKEN}
+      DISCOVERY_DOCKER_HOST: nas.lan
+    volumes:
+      - homepage_data:/data
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+```
+
 ## The API
 
 GraphQL at `/graphql`. In development, GraphiQL is served there too. `schema.graphql` is printed by `npm run codegen`
@@ -200,6 +254,9 @@ GraphQL at `/graphql`. In development, GraphiQL is served there too. `schema.gra
 - **Item mutations:** `addItem`, `updateItem`, `removeItem`, `moveItem`. `moveItem` can move an item into another
   section.
 - **Settings:** `setSearchEngines`.
+- **Discovery (editors only):** `discoveredApps(includeDismissed)`, `discoverySources` and `describeUrl(url)`; the
+  mutations `rescanDiscovery` and `dismissDiscoveredApp`. `ItemInput.discoveredId` links an item to the app it
+  came from.
 
 Failures carry `extensions.code`: `BAD_USER_INPUT`, `NOT_FOUND` or `QUERY_TOO_COMPLEX`. `GET /healthz` answers
 `{ ok, version }`, or 503 when the database doesn't answer.
