@@ -1,11 +1,10 @@
-import type { ReactNode } from 'react';
+import { type ReactNode, useRef } from 'react';
 import { useCanEdit } from '@/auth/use-access';
 import { Disclosure } from '@/components/disclosure';
 import { EmptyState } from '@/components/empty-state';
 import { Button } from '@/components/ui/button';
 import { Plus } from '@/components/ui/icons';
-import { cn } from '@/lib/utils';
-import { SECTION_GRID, SPAN_CLASSES } from '@/pages/column-span';
+import { spanStyle } from '@/pages/column-span';
 import { ItemFrame } from '@/pages/item-frame';
 import { ItemMenu } from '@/pages/item-menu';
 import { ItemTile } from '@/pages/item-tile';
@@ -13,6 +12,8 @@ import { hasAddress, type Item, type Page, type Section } from '@/pages/use-page
 import { WidgetCard } from '@/widgets/widget-card';
 import { useSectionOpen } from './fold-state';
 import { SectionMenu } from './section-menu';
+import { useSectionColumns } from './use-section-columns';
+import { useLayoutColumns } from './use-site-layout';
 
 /** An item and where it sits in its section. */
 interface IndexedItem<T extends Item = Item> {
@@ -62,7 +63,8 @@ export function SectionView({ page, section, index, onAddItem, onEditItem }: Sec
       onOpenChange={setOpen}
       actionSlot={menu}
       titleClassName="font-semibold text-base text-foreground"
-      contentClassName="pt-3"
+      // The disclosure indents its body under the chevron; cards line up with the page's other sections instead.
+      contentClassName="pt-3 pl-0"
       contentSlot={items}
     />
   );
@@ -79,6 +81,9 @@ interface SectionItemsProps {
 
 /** A section's items in one grid: tiles one column wide, frames and widgets their chosen width; or one line saying it is empty. */
 function SectionItems({ page, section, canEdit, onAddItem, onEditItem }: SectionItemsProps) {
+  const gridRef = useRef<HTMLUListElement>(null);
+  const columns = useSectionColumns(gridRef, useLayoutColumns());
+
   if (section.items.length === 0) {
     return (
       <EmptyState
@@ -128,14 +133,18 @@ function SectionItems({ page, section, canEdit, onAddItem, onEditItem }: Section
   };
 
   return (
-    <div className="@container w-full">
-      <ul aria-label={label} className={SECTION_GRID}>
-        {section.items.map((item, index) => (
-          <li key={item.id} className={cn('min-w-0', SPAN_CLASSES[item.columnSpan])}>
-            {cardFor({ item, index })}
-          </li>
-        ))}
-      </ul>
-    </div>
+    <ul
+      ref={gridRef}
+      aria-label={label}
+      // items-start: a tile keeps its own height beside a tall widget instead of stretching to the row's.
+      className="grid w-full items-start gap-4"
+      style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}
+    >
+      {section.items.map((item, index) => (
+        <li key={item.id} className="min-w-0" style={spanStyle(item, columns)}>
+          {cardFor({ item, index })}
+        </li>
+      ))}
+    </ul>
   );
 }

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { ColumnSpan, ItemInput, ItemKind, OpensIn } from '@/__generated__/graphql';
+import type { ItemInput, ItemKind, OpensIn } from '@/__generated__/graphql';
 import { useKnownGroups, VISIBLE_TO_COPY } from '@/auth/known-groups';
 import { useAccess } from '@/auth/use-access';
 import {
@@ -21,9 +21,10 @@ import { FillInButton } from '@/discovery/fill-in-button';
 import { LinkedAppNote } from '@/discovery/linked-app-note';
 import { FrameCheckNotice } from '@/frames/frame-check-notice';
 import { messageOf } from '@/lib/error-message';
+import { useLayoutColumns } from '@/sections/use-site-layout';
 import { checkWidget, toWidgetInput, type WidgetDraft, widgetDraftOf } from '@/widgets/widget-draft';
 import { WidgetSettingsField } from '@/widgets/widget-settings-field';
-import { DEFAULT_SPAN, SPAN_LABELS } from './column-span';
+import { widthChoiceOf, widthFromChoice, widthOptions } from './column-span';
 import { checkFrameHeight, checkLength, checkTitle, checkUrl } from './form-checks';
 import { IconField } from './icon-field';
 import { ITEM_KINDS, OPENS_IN } from './item-kinds';
@@ -61,8 +62,8 @@ interface ItemDraft {
   icon: string | null;
   description: string;
   frameHeightPx: number | null;
-  /** How many grid columns a frame or widget spans; DEFAULT for its kind's. */
-  columnSpan: ColumnSpan | typeof DEFAULT_WIDTH;
+  /** A frame's or widget's width: DEFAULT for its kind's, FULL, or a number of columns as text. */
+  width: string;
   /** The section a new item goes in. Unused when editing. */
   sectionId: string;
   checkEnabled: boolean;
@@ -91,20 +92,6 @@ const OPENS_IN_OPTIONS: readonly RadioOption[] = Object.entries(OPENS_IN).map(
   }),
 );
 
-/** The width choice that means "whatever this kind gets by default". */
-const DEFAULT_WIDTH = 'DEFAULT';
-
-/**
- * The width choices for a frame or widget, the default first and named for what it is.
- *
- * @param kind - The item's kind.
- * @returns The options.
- */
-function widthOptions(kind: ItemKind): { value: string; label: string }[] {
-  const spans = Object.entries(SPAN_LABELS).map(([value, label]) => ({ value, label }));
-  return [{ value: DEFAULT_WIDTH, label: `Default (${SPAN_LABELS[DEFAULT_SPAN[kind]].toLowerCase()})` }, ...spans];
-}
-
 /**
  * Turns the form's values into the API's input.
  *
@@ -127,7 +114,7 @@ function toInput(draft: ItemDraft): ItemInput {
     icon: draft.icon,
     description: description === '' ? null : description,
     frameHeightPx: isFrame ? draft.frameHeightPx : null,
-    columnSpan: draft.columnSpan === DEFAULT_WIDTH || draft.kind === 'LINK' ? null : draft.columnSpan,
+    ...(draft.kind === 'LINK' ? { columnSpan: null, fullWidth: null } : widthFromChoice(draft.width)),
     checkEnabled: draft.checkEnabled && hasSomethingToCheck,
     checkUrl: draft.checkUrl.trim(),
     widget: isWidget ? toWidgetInput(draft.widget) : null,
@@ -139,6 +126,7 @@ function toInput(draft: ItemDraft): ItemInput {
 /** Adds an item to a page, or changes one. */
 export function ItemDialog({ open, onOpenChange, page, item, sectionId, prefill }: ItemDialogProps) {
   const limits = usePageLimits().data;
+  const layoutColumns = useLayoutColumns();
   const addItem = useAddItem();
   const updateItem = useUpdateItem();
   const [serverError, setServerError] = useState<string | undefined>(undefined);
@@ -157,7 +145,7 @@ export function ItemDialog({ open, onOpenChange, page, item, sectionId, prefill 
     icon: item?.icon ?? prefill?.icon ?? null,
     description: item?.description ?? prefill?.description ?? '',
     frameHeightPx: item?.frameHeightPx ?? null,
-    columnSpan: item === undefined || item.columnSpan === DEFAULT_SPAN[item.kind] ? DEFAULT_WIDTH : item.columnSpan,
+    width: widthChoiceOf(item, item?.kind ?? 'LINK'),
     sectionId: sectionId ?? page.sections[0]?.id ?? '',
     checkEnabled: item?.checkEnabled ?? true,
     checkUrl: item?.checkUrl ?? '',
@@ -317,10 +305,10 @@ export function ItemDialog({ open, onOpenChange, page, item, sectionId, prefill 
               kind === 'LINK' ? null : (
                 <SelectField
                   form={form}
-                  name="columnSpan"
+                  name="width"
                   label="Width"
-                  description="How many columns of the page it takes. On a narrow screen everything is one column."
-                  options={widthOptions(kind)}
+                  description={`How many of the page's ${layoutColumns} columns it takes (Settings → General). A narrow screen has fewer.`}
+                  options={widthOptions(kind, layoutColumns, item)}
                 />
               )
             }
