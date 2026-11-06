@@ -14,7 +14,7 @@ import * as edits from './page-edits.ts';
 import { describeIssues, SLUG_PATTERN } from './page-input.ts';
 import { slugFrom, uniqueSlug } from './slug.ts';
 import type { Widget } from './widget.ts';
-import { diskWidgetSchema, widgetFromDisk, widgetToDisk } from './widget-disk.ts';
+import { storedWidgetSchema, widgetFromStored, widgetToStored } from './widget-storage.ts';
 
 const { maxPages } = PAGE_LIMIT_DEFAULTS;
 
@@ -69,8 +69,8 @@ function widgetFromRow(row: ItemRow): Widget | null {
   if (row.widget === null) {
     return null;
   }
-  const parsed = diskWidgetSchema.safeParse(row.widget);
-  const widget = parsed.success ? widgetFromDisk(parsed.data) : describeIssues(parsed.error);
+  const parsed = storedWidgetSchema.safeParse(row.widget);
+  const widget = parsed.success ? widgetFromStored(parsed.data) : describeIssues(parsed.error);
   if (typeof widget === 'string') {
     throw new Error(`The widget of item "${row.id}" on page "${row.pageSlug}" can't be read: ${widget}`);
   }
@@ -261,7 +261,7 @@ export async function writePage(tx: Transaction, page: Page): Promise<Page> {
       checkEnabled: item.check.enabled,
       checkUrl: item.check.url,
       // The YAML mapping, secret references as written: never a resolved value.
-      widget: item.widget === null ? null : widgetToDisk(item.widget),
+      widget: item.widget === null ? null : widgetToStored(item.widget),
       visibleTo: item.visibleTo,
       // A link to a discovered app deleted since is dropped, as the foreign key does on delete.
       discoveredId: item.discoveredId !== null && linkable.has(item.discoveredId) ? item.discoveredId : null,
