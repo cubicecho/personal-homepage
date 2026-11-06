@@ -101,6 +101,7 @@ describe('createDescriber', () => {
     expect(described).toEqual({
       url: `${site.base}/`,
       title: 'Jellyfin',
+      names: ['Jellyfin', 'Login'],
       description: 'The free media system',
       icon: `${site.base}/app/icon-192.png`,
       problem: null,

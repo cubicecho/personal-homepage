@@ -7,6 +7,7 @@
 // fallback for the name and description. `homepage.hide=true` and Dockhand's `dockhand.hidden=true` keep a
 // container out.
 import { DISCOVERY_DEFAULTS } from '../core/defaults.ts';
+import { imageNames } from '../icons/icon-match.ts';
 import type { IconRef } from '../pages/page.ts';
 import { isIconRef, isWebUrl } from '../pages/page-input.ts';
 import type { Candidate, DiscoverySourceName } from './candidate.ts';
@@ -142,6 +143,7 @@ export function containerCandidate(container: ContainerSummary, host: ContainerH
     url,
     probeUrl: null,
     fallbackName: container.name,
+    nameHints: [container.name, ...imageNames(container.image)],
     explicit: {
       name: label('homepage.name') ?? label('org.opencontainers.image.title'),
       description: label('homepage.description') ?? label('org.opencontainers.image.description'),

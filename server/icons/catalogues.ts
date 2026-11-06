@@ -7,6 +7,9 @@
 //     { "png": ["jellyfin.png", ...], "svg": ["jellyfin.svg", ...], "webp": [...] }
 //   Images:  https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/<format>/<name>.<format>
 //   Not every icon has every format: about 3,800 have an SVG and 4,800 a PNG.
+//   Other names: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/metadata.json
+//     { "uptime-kuma": { "base": "svg", "aliases": ["status-page", ...], "categories": [...], ... }, ... }
+//   Only matching an app's name to an icon reads it (icon-match.ts).
 //
 // - selfh.st icons (`sh:`): https://github.com/selfhst/icons
 //   Listing: https://cdn.jsdelivr.net/gh/selfhst/icons/index.json
@@ -34,13 +37,15 @@ export interface CatalogueIcon {
   name: string;
   /** What a person calls it. */
   label: string;
-  /** The formats it is published in, best first. */
+  /** The formats it is published in, best first. Empty in a listing that only gives other names. */
   formats: IconFormat[];
+  /** Other names the catalogue knows it by, lower case. Only dashboard-icons' metadata lists them. */
+  aliases?: string[] | undefined;
 }
 
 /** A catalogue's description: where its listing is, how to read it, and where its images are. */
 export interface CatalogueSource {
-  /** The reference prefix, without the colon. */
+  /** The reference prefix, without the colon: the catalogue the listing belongs to. */
   prefix: 'di' | 'sh';
   /** The file the listing is kept in under the cache directory. */
   cacheFile: string;
@@ -61,6 +66,10 @@ const SELFHST_YES = 'Yes';
 const SELFHST_FORMAT_KEYS = { svg: 'SVG', png: 'PNG', webp: 'WebP' } as const satisfies Record<IconFormat, string>;
 
 const dashboardIconsListing = z.record(z.string(), z.array(z.string()));
+const dashboardIconsMetadata = z.record(
+  z.string(),
+  z.looseObject({ base: z.string().nullish(), aliases: z.array(z.string()).nullish() }),
+);
 const selfhstListing = z.array(z.looseObject({ Name: z.string(), Reference: z.string() }));
 
 /**
@@ -110,6 +119,20 @@ function parseSelfhst(listing: unknown): CatalogueIcon[] {
   });
 }
 
+/**
+ * Reads dashboard-icons' `metadata.json`: per icon, its base format and its other names.
+ *
+ * @param listing - The parsed JSON.
+ * @returns The icons, each with its aliases; formats only as far as the base one says.
+ */
+function parseDashboardIconsMetadata(listing: unknown): CatalogueIcon[] {
+  return Object.entries(dashboardIconsMetadata.parse(listing)).map(([name, entry]) => {
+    const base = ICON_FORMATS.find((format) => format === entry.base);
+    const aliases = (entry.aliases ?? []).map((alias) => alias.trim().toLowerCase()).filter((alias) => alias !== '');
+    return { name: name.toLowerCase(), label: labelFromName(name), formats: base === undefined ? [] : [base], aliases };
+  });
+}
+
 /** homarr-labs/dashboard-icons, as `di:`. */
 export const DASHBOARD_ICONS: CatalogueSource = {
   prefix: 'di',
@@ -117,6 +140,15 @@ export const DASHBOARD_ICONS: CatalogueSource = {
   listingUrl: `${DASHBOARD_ICONS_REPO}/tree.json`,
   imageUrl: (name, format) => `${DASHBOARD_ICONS_REPO}/${format}/${name}.${format}`,
   parse: parseDashboardIcons,
+};
+
+/** The other names dashboard-icons knows its icons by. Its images are `di:` ones. */
+export const DASHBOARD_ICONS_METADATA: CatalogueSource = {
+  prefix: 'di',
+  cacheFile: 'dashboard-icons-metadata.json',
+  listingUrl: `${DASHBOARD_ICONS_REPO}/metadata.json`,
+  imageUrl: (name, format) => `${DASHBOARD_ICONS_REPO}/${format}/${name}.${format}`,
+  parse: parseDashboardIconsMetadata,
 };
 
 /** selfh.st/icons, as `sh:`. */
@@ -131,7 +163,14 @@ export const SELFHST: CatalogueSource = {
 /** What is kept on disk for one catalogue. */
 const cachedCatalogue = z.object({
   fetchedAt: z.number(),
-  icons: z.array(z.object({ name: z.string(), label: z.string(), formats: z.array(z.enum(ICON_FORMATS)) })),
+  icons: z.array(
+    z.object({
+      name: z.string(),
+      label: z.string(),
+      formats: z.array(z.enum(ICON_FORMATS)),
+      aliases: z.array(z.string()).optional(),
+    }),
+  ),
 });
 type CachedCatalogue = z.output<typeof cachedCatalogue>;
 
