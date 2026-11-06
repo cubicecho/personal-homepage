@@ -91,16 +91,33 @@ function oidcPlugin(oidc: OidcConfig) {
         pkce: true,
         scopes: OIDC_SCOPES,
         // A provider may release only a username, or no name at all: fall back to the address's local part.
-        mapProfileToUser: (profile) => ({
-          name:
-            stringClaim(profile.name) ??
-            stringClaim(profile.preferred_username) ??
-            stringClaim(profile.email)?.split('@')[0] ??
-            '',
-        }),
+        // heautou's users need not have an address, and better-auth refuses a sign-in without one, so an
+        // account with none gets a placeholder made from its subject, at a domain that can never be real.
+        mapProfileToUser: (profile) => {
+          const email = stringClaim(profile.email);
+          return {
+            name: stringClaim(profile.name) ?? stringClaim(profile.preferred_username) ?? email?.split('@')[0] ?? '',
+            ...(email === undefined ? { email: placeholderEmail(profile), emailVerified: false } : {}),
+          };
+        },
       },
     ],
   });
+}
+
+/** The domain placeholder addresses are at: `.invalid` is reserved, so no real address can be there. */
+const NO_EMAIL_DOMAIN = 'oidc.invalid';
+
+/**
+ * Makes an address for a provider user who has none.
+ *
+ * @param profile - The provider's claims.
+ * @param profile.sub - The user's subject: unique and stable at the provider.
+ * @returns `<subject>@oidc.invalid`, lower case.
+ */
+function placeholderEmail(profile: { sub?: unknown; id?: unknown }): string {
+  const subject = stringClaim(profile.sub) ?? stringClaim(profile.id) ?? 'unknown';
+  return `${encodeURIComponent(subject).toLowerCase()}@${NO_EMAIL_DOMAIN}`;
 }
 
 /**

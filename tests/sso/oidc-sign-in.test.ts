@@ -294,6 +294,16 @@ describe('OIDC sign-in', () => {
     expect(after?.groups).toEqual(['family']);
   });
 
+  it('signs in a user with no address, as heautou users can be, under a placeholder one', async () => {
+    provider.profile = { sub: 'Abc-123', name: 'Ada' };
+    const { location } = await signIn();
+    expect(location.pathname).toBe('/auth/sso');
+    const verified = await gql(VERIFY, { token: location.searchParams.get('token') ?? '' });
+    const session = verified.data?.verifyOneTimeToken as unknown as { userId: string };
+    const [row] = await database.db.select().from(users).where(eq(users.id, session.userId));
+    expect(row).toMatchObject({ email: 'abc-123@oidc.invalid', name: 'Ada', emailVerified: false });
+  });
+
   it('refuses a callback whose state does not match', async () => {
     const { location } = await signIn((back) => back.searchParams.set('state', 'forged'));
     expect(location.pathname).toBe('/login');
