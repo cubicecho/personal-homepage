@@ -1,3 +1,10 @@
+# [3.5.0](https://github.com/cubicecho/personal-homepage/compare/v3.4.0...v3.5.0) (2026-11-06)
+
+
+### Features
+
+* **web:** add edit mode, and keep every shortcut behind Ctrl or ⌘ ([f61c462](https://github.com/cubicecho/personal-homepage/commit/f61c46226fade65ac310349cf2618967885b7c3d))
+
 # [3.4.0](https://github.com/cubicecho/personal-homepage/compare/v3.3.0...v3.4.0) (2026-11-06)
 
 
