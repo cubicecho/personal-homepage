@@ -207,7 +207,7 @@ export function ItemDialog({ open, onOpenChange, page, item, sectionId }: ItemDi
               ) : null
             }
           </form.Subscribe>
-          <IconField form={form} name="icon" label="Icon" />
+          <IconField form={form} name="icon" label="Icon" allowFavicon />
           <SwitchField
             form={form}
             name="checkEnabled"

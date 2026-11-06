@@ -7,6 +7,8 @@ export {
   ArrowUp,
   Ban,
   ExternalLink,
+  Globe,
+  ImageIcon,
   LayoutGrid,
   Link,
   PanelsTopLeft,

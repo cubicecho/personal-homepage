@@ -127,6 +127,16 @@ export interface IconSettings {
   catalogueCacheHours: number;
   /** Most results one icon search returns. */
   maxSearchResults: number;
+  /** How long a failed favicon or catalogue fetch is remembered before it is tried again, in minutes. */
+  failureRetryMinutes: number;
+  /** Largest page read while looking for a favicon's `<link>`, in bytes. */
+  maxFaviconPageBytes: number;
+  /** How long downloading one icon catalogue may take, in seconds. */
+  catalogueTimeoutSeconds: number;
+  /** Largest icon catalogue downloaded, in bytes. */
+  maxCatalogueBytes: number;
+  /** How long a browser may reuse a served favicon before asking again, in seconds. */
+  faviconBrowserCacheSeconds: number;
 }
 
 export const ICON_DEFAULTS: Readonly<IconSettings> = Object.freeze({
@@ -135,6 +145,11 @@ export const ICON_DEFAULTS: Readonly<IconSettings> = Object.freeze({
   maxFaviconBytes: 262_144,
   catalogueCacheHours: 24,
   maxSearchResults: 60,
+  failureRetryMinutes: 10,
+  maxFaviconPageBytes: 524_288,
+  catalogueTimeoutSeconds: 15,
+  maxCatalogueBytes: 8_388_608,
+  faviconBrowserCacheSeconds: 300,
 });
 
 /** A web search the launcher can send a query to. */
