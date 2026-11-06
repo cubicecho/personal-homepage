@@ -1,3 +1,24 @@
+# [3.0.0](https://github.com/cubicecho/personal-homepage/compare/v2.2.2...v3.0.0) (2026-11-06)
+
+
+* feat!: remove the zip download and every way of reading YAML pages ([21da835](https://github.com/cubicecho/personal-homepage/commit/21da83572ed4b7b1f81dbe20bee261f5626c084e))
+
+
+### Features
+
+* **discovery:** pick a catalogue icon when a found app's name matches one ([a3241b1](https://github.com/cubicecho/personal-homepage/commit/a3241b16d8966cbce1b8125346501d7a11a0545d))
+* move an item to another page, with everything about it ([69692bd](https://github.com/cubicecho/personal-homepage/commit/69692bd46d58605406b5c9619b34e6100ab7416d))
+* **web:** move an item to another page from its menu ([4c89906](https://github.com/cubicecho/personal-homepage/commit/4c8990671db7d5eec4eb23a1f04099471aff345c))
+
+
+### BREAKING CHANGES
+
+* GET /export.zip and npm run db:import-yaml are gone, and
+the server no longer imports YAML pages on first start. Back up by
+copying DATA_DIR/pg while the server is stopped, or with pg_dump on
+Postgres. To keep pages from a 1.x install, upgrade to the last 2.x
+release first and start it once so it imports them, then upgrade.
+
 ## [2.2.2](https://github.com/cubicecho/personal-homepage/compare/v2.2.1...v2.2.2) (2026-11-06)
 
 
