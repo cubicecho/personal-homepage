@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import type { Icon } from '@/__generated__/graphql';
 import { InputField, useAppForm } from '@/components/app-form';
 import { DialogLayout } from '@/components/dialog-layout';
 import { Alert } from '@/components/ui/alert';
@@ -23,7 +22,7 @@ interface PageDialogProps {
 interface PageDraft {
   title: string;
   slug: string;
-  icon: Icon | null;
+  icon: string | null;
 }
 
 /** Creates a page, or changes one's title and icon. */

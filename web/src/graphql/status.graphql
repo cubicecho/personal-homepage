@@ -1,0 +1,10 @@
+query ItemStatuses($pageSlug: ID!) {
+  itemStatuses(pageSlug: $pageSlug) {
+    itemId
+    state
+    httpStatus
+    latencyMs
+    checkedAt
+    message
+  }
+}

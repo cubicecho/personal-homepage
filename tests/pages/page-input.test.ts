@@ -1,8 +1,8 @@
 import { GraphQLError } from 'graphql';
 import { PAGE_LIMIT_DEFAULTS } from '../../server/core/defaults.ts';
 import { ErrorCode } from '../../server/core/errors.ts';
-import { Icon, ItemKind } from '../../server/pages/page.ts';
-import { parseItemFields, parseNewPage, parsePagePatch } from '../../server/pages/page-input.ts';
+import { ItemKind, OpensIn } from '../../server/pages/page.ts';
+import { parseItemFields, parseNewPage, parsePagePatch, parseSectionFields } from '../../server/pages/page-input.ts';
 
 /**
  * Runs a parse that should fail and returns its error code.
@@ -41,9 +41,11 @@ describe('parseItemFields', () => {
       kind: ItemKind.Link,
       title: 'Jellyfin',
       url: 'https://jf.local',
+      opensIn: OpensIn.NewTab,
       icon: null,
       description: null,
       frameHeightPx: null,
+      check: { enabled: true, url: null },
     });
   });
 
@@ -51,7 +53,37 @@ describe('parseItemFields', () => {
     expect(parseItemFields({ ...link, kind: ItemKind.Frame }).frameHeightPx).toBe(
       PAGE_LIMIT_DEFAULTS.defaultFrameHeightPx,
     );
-    expect(parseItemFields({ ...link, kind: ItemKind.App, frameHeightPx: 300 }).frameHeightPx).toBeNull();
+    expect(parseItemFields({ ...link, frameHeightPx: 300 }).frameHeightPx).toBeNull();
+  });
+
+  it('gives a link a place to open and a frame none', () => {
+    expect(parseItemFields({ ...link, opensIn: OpensIn.App }).opensIn).toBe(OpensIn.App);
+    expect(parseItemFields({ ...link, kind: ItemKind.Frame, opensIn: OpensIn.App }).opensIn).toBeNull();
+  });
+
+  it('reads the status check: on by default, off, or another URL', () => {
+    expect(parseItemFields({ ...link, checkEnabled: false }).check).toEqual({ enabled: false, url: null });
+    expect(parseItemFields({ ...link, checkUrl: ' http://nas.local/health ' }).check).toEqual({
+      enabled: true,
+      url: 'http://nas.local/health',
+    });
+    expect(parseItemFields({ ...link, checkUrl: '' }).check).toEqual({ enabled: true, url: null });
+    expect(codeOf(() => parseItemFields({ ...link, checkUrl: 'javascript:alert(1)' }))).toBe(ErrorCode.BadUserInput);
+  });
+
+  it.each([
+    ['film', 'film'],
+    ['FILM', 'film'],
+    ['di:jellyfin', 'di:jellyfin'],
+    ['SH:home-assistant', 'sh:home-assistant'],
+    ['favicon', 'favicon'],
+    ['https://cdn.example.com/Icon.png', 'https://cdn.example.com/Icon.png'],
+  ])('accepts the icon %s as %s', (icon, expected) => {
+    expect(parseItemFields({ ...link, icon }).icon).toBe(expected);
+  });
+
+  it.each(['nope', 'di:', 'xx:jellyfin', 'javascript:alert(1)'])('refuses the icon %s', (icon) => {
+    expect(codeOf(() => parseItemFields({ ...link, icon }))).toBe(ErrorCode.BadUserInput);
   });
 
   it('keeps a frame height inside the limits', () => {
@@ -79,7 +111,11 @@ describe('parseItemFields', () => {
 describe('parseNewPage', () => {
   it('leaves a missing or blank slug for the store to make', () => {
     expect(parseNewPage({ title: 'Media' })).toEqual({ title: 'Media', icon: null });
-    expect(parseNewPage({ title: 'Media', slug: null, icon: Icon.Film })).toEqual({ title: 'Media', icon: Icon.Film });
+    expect(parseNewPage({ title: 'Media', slug: null, icon: 'film' })).toEqual({ title: 'Media', icon: 'film' });
+  });
+
+  it('refuses favicon as a page icon: a page has no site', () => {
+    expect(codeOf(() => parseNewPage({ title: 'Media', icon: 'favicon' }))).toBe(ErrorCode.BadUserInput);
   });
 
   it('keeps a valid slug and refuses one that is not', () => {
@@ -94,5 +130,17 @@ describe('parsePagePatch', () => {
     expect(parsePagePatch({ title: ' Films ' })).toEqual({ title: 'Films' });
     expect(parsePagePatch({ icon: null })).toEqual({ icon: null });
     expect(parsePagePatch({})).toEqual({});
+  });
+});
+
+describe('parseSectionFields', () => {
+  it('makes a blank title null and folding default to open', () => {
+    expect(parseSectionFields({ title: '  ' })).toEqual({ title: null, collapsed: false });
+    expect(parseSectionFields({ title: ' Watch ', collapsed: true })).toEqual({ title: 'Watch', collapsed: true });
+  });
+
+  it('refuses an over-long title', () => {
+    const tooLong = 'x'.repeat(PAGE_LIMIT_DEFAULTS.maxTitleLength + 1);
+    expect(codeOf(() => parseSectionFields({ title: tooLong }))).toBe(ErrorCode.BadUserInput);
   });
 });

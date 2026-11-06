@@ -1,0 +1,7 @@
+query FrameCheck($url: String!) {
+  frameCheck(url: $url) {
+    url
+    framable
+    reason
+  }
+}

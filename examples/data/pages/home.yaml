@@ -2,18 +2,15 @@ title: Home
 icon: house
 items:
   - id: jellyfin
-    kind: link
     title: Jellyfin
     url: http://nas.local:8096
     icon: film
     description: Films and shows
   - id: home-assistant
-    kind: link
     title: Home Assistant
     url: http://homeassistant.local:8123
     icon: house
   - id: router
-    kind: link
     title: Router
     url: http://192.168.1.1
     icon: router

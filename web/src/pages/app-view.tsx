@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { ArrowLeft } from '@/components/ui/icons';
 import { AppWindow, ExternalLink } from '@/core/app-icons';
 import { iconElement } from '@/core/page-icons';
+import { FrameCheckNotice } from '@/frames/frame-check-notice';
 import { FRAME_SANDBOX } from './item-frame';
 import { findPage, type Page, usePages } from './use-pages';
 
@@ -81,7 +82,7 @@ export function AppView({ slug, itemId }: AppViewProps) {
       width="full"
       scroll={false}
       title={item.title}
-      iconSlot={iconElement(item.icon, AppWindow)}
+      iconSlot={iconElement(item.icon, AppWindow, item.iconUrl)}
       breadcrumbsSlot={<BackLink page={page} />}
       description="If the frame stays blank, the site refuses to be shown inside another page. Open it in the browser instead."
       actionSlot={
@@ -94,13 +95,27 @@ export function AppView({ slug, itemId }: AppViewProps) {
         />
       }
       contentSlot={
-        <iframe
-          src={item.url}
-          title={item.title}
-          sandbox={FRAME_SANDBOX}
-          referrerPolicy="no-referrer"
-          className="h-full w-full rounded-md border border-foreground/10 bg-background"
-        />
+        <div className="flex h-full min-h-0 flex-col gap-3">
+          <FrameCheckNotice
+            url={item.url}
+            actionSlot={
+              <Button
+                size="sm"
+                variant="info"
+                linkSlot={<a href={item.url} target="_blank" rel="noreferrer" />}
+                iconSlot={<ExternalLink />}
+                content="Open in the browser"
+              />
+            }
+          />
+          <iframe
+            src={item.url}
+            title={item.title}
+            sandbox={FRAME_SANDBOX}
+            referrerPolicy="no-referrer"
+            className="min-h-0 w-full flex-1 rounded-md border border-foreground/10 bg-background"
+          />
+        </div>
       }
     />
   );

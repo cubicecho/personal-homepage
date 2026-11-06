@@ -1,6 +1,7 @@
 import { type QueryClient, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   AddItemDocument,
+  AddSectionDocument,
   CreatePageDocument,
   type CreatePageInput,
   DeletePageDocument,
@@ -8,13 +9,18 @@ import {
   type ItemInput,
   MoveItemDocument,
   MovePageDocument,
+  MoveSectionDocument,
   type PageFieldsFragment,
   PageLimitsDocument,
   PagesDocument,
   RemoveItemDocument,
+  RemoveSectionDocument,
+  type SectionFieldsFragment,
+  type SectionInput,
   UpdateItemDocument,
   UpdatePageDocument,
   type UpdatePageInput,
+  UpdateSectionDocument,
 } from '@/__generated__/graphql';
 import { request } from '@/core/gql';
 
@@ -22,6 +28,8 @@ import { request } from '@/core/gql';
 export type Page = PageFieldsFragment;
 /** An item on a page. */
 export type Item = ItemFieldsFragment;
+/** A group of items on a page, with an optional heading. */
+export type Section = SectionFieldsFragment;
 
 /** The one query every page view reads: all pages, with their items. */
 export const PAGES_KEY = ['pages'] as const;
@@ -120,14 +128,71 @@ export function useMovePage() {
 }
 
 /**
- * Adds an item at the end of a page.
+ * Adds a section at the end of a page.
+ *
+ * @returns The mutation; it resolves to the page.
+ */
+export function useAddSection() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: async (vars: { pageSlug: string; input: SectionInput }) =>
+      (await request(AddSectionDocument, vars)).addSection,
+    onSuccess: (page) => writePage(client, page),
+  });
+}
+
+/**
+ * Changes a section's heading or whether it starts folded.
+ *
+ * @returns The mutation; it resolves to the page.
+ */
+export function useUpdateSection() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: async (vars: { pageSlug: string; id: string; input: SectionInput }) =>
+      (await request(UpdateSectionDocument, vars)).updateSection,
+    onSuccess: (page) => writePage(client, page),
+  });
+}
+
+/**
+ * Removes a section and its items.
+ *
+ * @returns The mutation; it resolves to the page.
+ */
+export function useRemoveSection() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: async (vars: { pageSlug: string; id: string }) =>
+      (await request(RemoveSectionDocument, vars)).removeSection,
+    onSuccess: (page) => writePage(client, page),
+  });
+}
+
+/**
+ * Moves a section within its page.
+ *
+ * @returns The mutation; it resolves to the page.
+ */
+export function useMoveSection() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: async (vars: { pageSlug: string; id: string; toIndex: number }) =>
+      (await request(MoveSectionDocument, vars)).moveSection,
+    onSuccess: (page) => writePage(client, page),
+  });
+}
+
+/**
+ * Adds an item at the end of a section.
  *
  * @returns The mutation.
  */
 export function useAddItem() {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: async (vars: { pageSlug: string; input: ItemInput }) => (await request(AddItemDocument, vars)).addItem,
+    mutationFn: async (vars: { pageSlug: string; sectionId?: string | null; input: ItemInput }) =>
+      (await request(AddItemDocument, vars)).addItem,
     onSuccess: (page) => writePage(client, page),
   });
 }
@@ -160,14 +225,14 @@ export function useRemoveItem() {
 }
 
 /**
- * Moves an item within its page.
+ * Moves an item within its section, or into another one.
  *
  * @returns The mutation.
  */
 export function useMoveItem() {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: async (vars: { pageSlug: string; id: string; toIndex: number }) =>
+    mutationFn: async (vars: { pageSlug: string; id: string; toSectionId?: string | null; toIndex: number }) =>
       (await request(MoveItemDocument, vars)).moveItem,
     onSuccess: (page) => writePage(client, page),
   });
@@ -182,4 +247,14 @@ export function useMoveItem() {
  */
 export function findPage(pages: readonly Page[], slug: string): Page | undefined {
   return pages.find((page) => page.slug === slug);
+}
+
+/**
+ * Names a section for a picker or a question, including one with no heading.
+ *
+ * @param section - The section.
+ * @returns Its title, or a stand-in for an untitled one.
+ */
+export function sectionLabel(section: Section): string {
+  return section.title ?? 'Untitled section';
 }

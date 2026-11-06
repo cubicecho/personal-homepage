@@ -3,7 +3,7 @@ import path from 'node:path';
 import { parse } from 'yaml';
 import { PAGE_LIMIT_DEFAULTS } from '../../server/core/defaults.ts';
 import { ErrorCode } from '../../server/core/errors.ts';
-import { HOME_SLUG, Icon, ItemKind, type PageStore } from '../../server/pages/page.ts';
+import { HOME_SLUG, ItemKind, itemsOf, OpensIn, type PageStore } from '../../server/pages/page.ts';
 import { createYamlPageStore } from '../../server/pages/yaml-page-store.ts';
 import { linkFields, makeDataDir } from '../helpers.ts';
 
@@ -32,7 +32,14 @@ describe('YAML page store', () => {
   });
 
   it('starts with a home page', async () => {
-    expect(await store.list()).toEqual([{ slug: HOME_SLUG, title: 'Home', icon: Icon.House, items: [] }]);
+    expect(await store.list()).toEqual([
+      {
+        slug: HOME_SLUG,
+        title: 'Home',
+        icon: 'house',
+        sections: [{ id: 'main', title: null, collapsed: false, items: [] }],
+      },
+    ]);
     expect(await readYaml('pages/home.yaml')).toEqual({ title: 'Home', icon: 'house', items: [] });
   });
 
@@ -43,7 +50,7 @@ describe('YAML page store', () => {
   });
 
   it('creates pages with slugs made from their titles, de-duplicated', async () => {
-    const media = await store.createPage({ title: 'Média Server!', icon: Icon.Film });
+    const media = await store.createPage({ title: 'Média Server!', icon: 'film' });
     const again = await store.createPage({ title: 'Media server', icon: null });
     const symbols = await store.createPage({ title: '!!!', icon: null });
     expect([media.slug, again.slug, symbols.slug]).toEqual(['media-server', 'media-server-2', 'page']);
@@ -81,11 +88,11 @@ describe('YAML page store', () => {
   });
 
   it('changes a page title and icon, keeping what was not sent', async () => {
-    await store.createPage({ title: 'Tools', icon: Icon.Terminal });
+    await store.createPage({ title: 'Tools', icon: 'terminal' });
     expect(await store.updatePage('tools', { title: 'Utilities' })).toMatchObject({
       slug: 'tools',
       title: 'Utilities',
-      icon: Icon.Terminal,
+      icon: 'terminal',
     });
     expect((await store.updatePage('tools', { icon: null })).icon).toBeNull();
     expect(await readYaml('pages/tools.yaml')).toEqual({ title: 'Utilities', items: [] });
@@ -124,22 +131,27 @@ describe('YAML page store', () => {
   });
 
   it('adds, updates, moves and removes items', async () => {
-    await store.addItem(HOME_SLUG, linkFields('Jellyfin', { icon: Icon.Film, description: 'Films' }));
-    await store.addItem(HOME_SLUG, linkFields('Jellyfin'));
+    await store.addItem(HOME_SLUG, null, linkFields('Jellyfin', { icon: 'film', description: 'Films' }));
+    await store.addItem(HOME_SLUG, null, linkFields('Jellyfin'));
     const page = await store.addItem(
       HOME_SLUG,
-      linkFields('Grafana', { kind: ItemKind.Frame, frameHeightPx: PAGE_LIMIT_DEFAULTS.defaultFrameHeightPx }),
+      null,
+      linkFields('Grafana', {
+        kind: ItemKind.Frame,
+        opensIn: null,
+        frameHeightPx: PAGE_LIMIT_DEFAULTS.defaultFrameHeightPx,
+      }),
     );
-    expect(page.items.map((item) => item.id)).toEqual(['jellyfin', 'jellyfin-2', 'grafana']);
+    expect(itemsOf(page).map((item) => item.id)).toEqual(['jellyfin', 'jellyfin-2', 'grafana']);
 
-    const updated = await store.updateItem(HOME_SLUG, 'jellyfin-2', linkFields('Plex', { kind: ItemKind.App }));
-    expect(updated.items[1]).toMatchObject({ id: 'jellyfin-2', title: 'Plex', kind: ItemKind.App });
+    const updated = await store.updateItem(HOME_SLUG, 'jellyfin-2', linkFields('Plex', { opensIn: OpensIn.App }));
+    expect(itemsOf(updated)[1]).toMatchObject({ id: 'jellyfin-2', title: 'Plex', opensIn: OpensIn.App });
 
-    const moved = await store.moveItem(HOME_SLUG, 'grafana', 0);
-    expect(moved.items.map((item) => item.id)).toEqual(['grafana', 'jellyfin', 'jellyfin-2']);
+    const moved = await store.moveItem(HOME_SLUG, 'grafana', null, 0);
+    expect(itemsOf(moved).map((item) => item.id)).toEqual(['grafana', 'jellyfin', 'jellyfin-2']);
 
     const removed = await store.removeItem(HOME_SLUG, 'jellyfin');
-    expect(removed.items.map((item) => item.id)).toEqual(['grafana', 'jellyfin-2']);
+    expect(itemsOf(removed).map((item) => item.id)).toEqual(['grafana', 'jellyfin-2']);
     expect(await store.find(HOME_SLUG)).toEqual(removed);
 
     expect(await readYaml('pages/home.yaml')).toEqual({
@@ -153,17 +165,21 @@ describe('YAML page store', () => {
           url: 'http://nas.local:8096',
           frameHeightPx: PAGE_LIMIT_DEFAULTS.defaultFrameHeightPx,
         },
-        { id: 'jellyfin-2', kind: 'app', title: 'Plex', url: 'http://nas.local:8096' },
+        { id: 'jellyfin-2', opensIn: 'app', title: 'Plex', url: 'http://nas.local:8096' },
       ],
     });
   });
 
   it('refuses unknown pages and items', async () => {
     const notFound = { extensions: { code: ErrorCode.NotFound } };
-    await expect(store.addItem('nope', linkFields('X'))).rejects.toMatchObject(notFound);
+    await expect(store.addItem('nope', null, linkFields('X'))).rejects.toMatchObject(notFound);
+    await expect(store.addItem(HOME_SLUG, 'nope', linkFields('X'))).rejects.toMatchObject(notFound);
     await expect(store.updateItem(HOME_SLUG, 'nope', linkFields('X'))).rejects.toMatchObject(notFound);
     await expect(store.removeItem(HOME_SLUG, 'nope')).rejects.toMatchObject(notFound);
-    await expect(store.moveItem(HOME_SLUG, 'nope', 0)).rejects.toMatchObject(notFound);
+    await expect(store.moveItem(HOME_SLUG, 'nope', null, 0)).rejects.toMatchObject(notFound);
+    await expect(store.updateSection(HOME_SLUG, 'nope', { title: 'X', collapsed: false })).rejects.toMatchObject(
+      notFound,
+    );
     await expect(store.updatePage('nope', { title: 'X' })).rejects.toMatchObject(notFound);
     expect(await store.find('nope')).toBeNull();
     expect(await store.find('../site')).toBeNull();
@@ -177,7 +193,7 @@ describe('YAML page store', () => {
       url: 'http://nas.local',
     }));
     await writeFile(path.join(pagesDir(), 'full.yaml'), JSON.stringify({ title: 'Full', items }));
-    await expect(store.addItem('full', linkFields('One more'))).rejects.toMatchObject({
+    await expect(store.addItem('full', null, linkFields('One more'))).rejects.toMatchObject({
       extensions: { code: ErrorCode.BadUserInput },
     });
   });
@@ -203,25 +219,36 @@ describe('YAML page store', () => {
     expect(await store.find(HOME_SLUG)).toEqual({
       slug: HOME_SLUG,
       title: 'Hand made',
-      icon: Icon.Server,
-      items: [
+      icon: 'server',
+      sections: [
         {
-          id: 'router',
-          kind: ItemKind.Link,
-          title: 'Router',
-          url: 'http://192.168.1.1',
-          icon: null,
-          description: null,
-          frameHeightPx: null,
-        },
-        {
-          id: 'router-2',
-          kind: ItemKind.Frame,
-          title: 'Router',
-          url: 'https://router.local',
-          icon: null,
-          description: null,
-          frameHeightPx: PAGE_LIMIT_DEFAULTS.maxFrameHeightPx,
+          id: 'main',
+          title: null,
+          collapsed: false,
+          items: [
+            {
+              id: 'router',
+              kind: ItemKind.Link,
+              title: 'Router',
+              url: 'http://192.168.1.1',
+              opensIn: OpensIn.NewTab,
+              icon: null,
+              description: null,
+              frameHeightPx: null,
+              check: { enabled: true, url: null },
+            },
+            {
+              id: 'router-2',
+              kind: ItemKind.Frame,
+              title: 'Router',
+              url: 'https://router.local',
+              opensIn: null,
+              icon: null,
+              description: null,
+              frameHeightPx: PAGE_LIMIT_DEFAULTS.maxFrameHeightPx,
+              check: { enabled: true, url: null },
+            },
+          ],
         },
       ],
     });
@@ -244,7 +271,7 @@ describe('YAML page store', () => {
       extensions: { code: ErrorCode.NotFound },
       message: expect.stringMatching(/pages\/tools\.yaml not valid YAML.*Fix or delete the file/),
     });
-    await expect(store.addItem('bad-url', linkFields('X'))).rejects.toMatchObject({
+    await expect(store.addItem('bad-url', null, linkFields('X'))).rejects.toMatchObject({
       extensions: { code: ErrorCode.NotFound },
       message: expect.stringContaining('items.0.url'),
     });
@@ -258,17 +285,94 @@ describe('YAML page store', () => {
 
   it('lands every one of many concurrent writes', async () => {
     const adds = Array.from({ length: CONCURRENT_ADDS }, (_unused, index) =>
-      store.addItem(HOME_SLUG, linkFields(`Service ${index}`)),
+      store.addItem(HOME_SLUG, null, linkFields(`Service ${index}`)),
     );
     await Promise.all(adds);
     const page = await store.find(HOME_SLUG);
-    expect(page?.items).toHaveLength(CONCURRENT_ADDS);
+    expect(page === null ? [] : itemsOf(page)).toHaveLength(CONCURRENT_ADDS);
     const files = await readdir(pagesDir());
     expect(files.filter((file) => file.endsWith('.tmp'))).toEqual([]);
   });
 
   it('keeps writing after a write that failed', async () => {
-    await expect(store.addItem('nope', linkFields('X'))).rejects.toBeDefined();
-    expect((await store.addItem(HOME_SLUG, linkFields('After'))).items).toHaveLength(1);
+    await expect(store.addItem('nope', null, linkFields('X'))).rejects.toBeDefined();
+    expect(itemsOf(await store.addItem(HOME_SLUG, null, linkFields('After')))).toHaveLength(1);
+  });
+
+  it('adds, renames, folds, moves and removes sections, writing them as sections', async () => {
+    await store.addItem(HOME_SLUG, null, linkFields('Jellyfin'));
+    await store.addSection(HOME_SLUG, { title: 'Admin', collapsed: false });
+    await store.addSection(HOME_SLUG, { title: 'Admin', collapsed: true });
+    let page = await store.addItem(HOME_SLUG, 'admin', linkFields('Router'));
+    expect(page.sections.map((section) => section.id)).toEqual(['main', 'admin', 'admin-2']);
+
+    page = await store.moveItem(HOME_SLUG, 'jellyfin', 'admin-2', 0);
+    expect(page.sections.map((section) => section.items.map((item) => item.id))).toEqual([
+      [],
+      ['router'],
+      ['jellyfin'],
+    ]);
+
+    page = await store.updateSection(HOME_SLUG, 'admin-2', { title: 'Media', collapsed: false });
+    page = await store.moveSection(HOME_SLUG, 'admin-2', 0);
+    expect(page.sections.map((section) => section.title)).toEqual(['Media', null, 'Admin']);
+
+    expect(await readYaml('pages/home.yaml')).toEqual({
+      title: 'Home',
+      icon: 'house',
+      sections: [
+        { id: 'admin-2', title: 'Media', items: [{ id: 'jellyfin', title: 'Jellyfin', url: 'http://nas.local:8096' }] },
+        { id: 'main', items: [] },
+        { id: 'admin', title: 'Admin', items: [{ id: 'router', title: 'Router', url: 'http://nas.local:8096' }] },
+      ],
+    });
+
+    page = await store.removeSection(HOME_SLUG, 'main');
+    page = await store.removeSection(HOME_SLUG, 'admin');
+    expect(page.sections.map((section) => section.id)).toEqual(['admin-2']);
+    await expect(store.removeSection(HOME_SLUG, 'admin-2')).rejects.toMatchObject({
+      extensions: { code: ErrorCode.BadUserInput },
+    });
+  });
+
+  it('reads older and hand-written forms: app kind, check, unknown icons, sections', async () => {
+    await writeFile(
+      path.join(pagesDir(), 'old.yaml'),
+      [
+        'title: Old',
+        'icon: not-an-icon',
+        'sections:',
+        '  - title: Apps',
+        '    collapsed: true',
+        '    items:',
+        '      - kind: app',
+        '        title: Kanban',
+        '        url: http://tools.local',
+        '        check: false',
+        '      - title: NAS',
+        '        url: http://nas.local',
+        '        icon: DI:Synology',
+        '        check: http://nas.local/health',
+      ].join('\n'),
+    );
+    const page = await store.find('old');
+    expect(page?.icon).toBeNull();
+    expect(page?.sections).toMatchObject([
+      {
+        id: 'apps',
+        title: 'Apps',
+        collapsed: true,
+        items: [
+          { id: 'kanban', kind: ItemKind.Link, opensIn: OpensIn.App, check: { enabled: false, url: null } },
+          { id: 'nas', icon: 'di:synology', check: { enabled: true, url: 'http://nas.local/health' } },
+        ],
+      },
+    ]);
+  });
+
+  it('keeps the other keys of site.yaml when it writes the order', async () => {
+    await writeFile(path.join(dir, 'site.yaml'), 'search:\n  defaultPrefix: g\npageOrder: []\n');
+    await store.createPage({ title: 'Tools', icon: null });
+    expect(await readYaml('site.yaml')).toEqual({ search: { defaultPrefix: 'g' }, pageOrder: ['tools'] });
   });
 });

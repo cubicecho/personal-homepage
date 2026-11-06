@@ -2,7 +2,7 @@ title: Tools
 icon: terminal
 items:
   - id: kanban
-    kind: app
+    opensIn: app
     title: Kanban
     url: http://tools.local:3000
     icon: kanban

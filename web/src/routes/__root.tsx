@@ -13,8 +13,10 @@ import { ThemePicker } from '@/components/ui/theme-picker';
 import { useThemePreference } from '@/components/ui/theme-preference';
 import { LayoutGrid } from '@/core/app-icons';
 import { iconElement } from '@/core/page-icons';
+import { ExportButton } from '@/export/export-button';
 import { PageDialog } from '@/pages/page-dialog';
 import { type Page, usePages } from '@/pages/use-pages';
+import { SearchButton, SearchProvider } from '@/search/search-launcher';
 
 const SidebarLink = createLink(SidebarNavItem);
 const BarLink = createLink(BarNavItem);
@@ -26,12 +28,18 @@ export const Route = createRootRoute({
   errorComponent: ({ error, reset }) => <RouteError error={error} reset={reset} />,
 });
 
-/** The app's mark and name, as the sidebar's header and the phone bar both show it. */
-function Brand() {
+/**
+ * The app's mark and name, as the sidebar's header and the phone bar both show it.
+ *
+ * @param props - How much room it has.
+ * @param props.compact - Draw the mark alone, its name kept for screen readers: the phone bar has no room for it.
+ * @returns The link home.
+ */
+function Brand({ compact = false }: { compact?: boolean }) {
   return (
     <Link to="/" className="flex items-center gap-2 rounded-md px-2 py-1 font-semibold text-foreground text-sm">
       <House className="size-4" aria-hidden />
-      Homepage
+      <span className={compact ? 'sr-only' : undefined}>Homepage</span>
     </Link>
   );
 }
@@ -83,14 +91,14 @@ function RootRoute() {
   const newPageLabel = 'New page';
 
   return (
-    <>
+    <SearchProvider>
       <SidebarLayout
         className="h-svh"
         sidebarPosition="start"
         sidebarWidth="auto"
         divider="none"
         sidebarHideBelow="md"
-        brandSlot={<Brand />}
+        brandSlot={<Brand compact />}
         navLabel="Pages"
         navSlot={barPages.map((page) => (
           <BarLink
@@ -103,6 +111,7 @@ function RootRoute() {
         ))}
         actionSlot={
           <>
+            <SearchButton variant="icon" />
             {hasMorePages ? (
               <Menu>
                 <MenuTrigger asChild>
@@ -135,7 +144,12 @@ function RootRoute() {
         sidebarSlot={
           <Sidebar
             label="Main"
-            headerSlot={<Brand />}
+            headerSlot={
+              <div className="flex flex-col gap-2">
+                <Brand />
+                <SearchButton variant="wide" />
+              </div>
+            }
             contentSlot={
               <SidebarSection
                 as="nav"
@@ -170,7 +184,12 @@ function RootRoute() {
                 ))}
               />
             }
-            footerSlot={<ThemePicker variant="compact" />}
+            footerSlot={
+              <div className="flex flex-col gap-2">
+                <ExportButton />
+                <ThemePicker variant="compact" />
+              </div>
+            }
           />
         }
         contentSlot={<Outlet />}
@@ -183,6 +202,6 @@ function RootRoute() {
           onSaved={(page) => void navigate({ to: '/pages/$slug', params: { slug: page.slug } })}
         />
       ) : null}
-    </>
+    </SearchProvider>
   );
 }

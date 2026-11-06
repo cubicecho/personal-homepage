@@ -3,6 +3,8 @@ import { CardLayout } from '@/components/card-layout';
 import { Button } from '@/components/ui/button';
 import { ExternalLink, PanelsTopLeft } from '@/core/app-icons';
 import { iconElement } from '@/core/page-icons';
+import { ItemStatusDot } from '@/status/item-status-dot';
+import { useCurrentPageSlug } from '@/status/use-item-statuses';
 import type { Item } from './use-pages';
 
 interface ItemFrameProps {
@@ -16,13 +18,15 @@ export const FRAME_SANDBOX = 'allow-scripts allow-same-origin allow-forms allow-
 
 /** A frame item: the service's own page, inline, with a way out to the browser. */
 export function ItemFrame({ item, menuSlot }: ItemFrameProps) {
+  const pageSlug = useCurrentPageSlug();
   return (
     <CardLayout
       title={item.title}
-      iconSlot={iconElement(item.icon, PanelsTopLeft)}
+      iconSlot={iconElement(item.icon, PanelsTopLeft, item.iconUrl)}
       description={item.description ?? undefined}
       actionSlot={
         <>
+          <ItemStatusDot pageSlug={pageSlug} item={item} showLabel />
           <Button
             variant="outline"
             size="sm"

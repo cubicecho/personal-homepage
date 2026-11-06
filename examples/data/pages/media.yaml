@@ -2,12 +2,11 @@ title: Media
 icon: film
 items:
   - id: jellyfin
-    kind: app
+    opensIn: app
     title: Jellyfin
     url: http://nas.local:8096
     icon: film
   - id: navidrome
-    kind: link
     title: Navidrome
     url: http://nas.local:4533
     icon: music

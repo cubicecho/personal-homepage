@@ -9,7 +9,7 @@ const LISTEN_HOST = '0.0.0.0';
 
 const pages = await createYamlPageStore({ dataDir: dataDir() });
 
-const server = createApp({ pages, dist: WEB_DIST }).listen(port(), LISTEN_HOST, () => {
+const server = createApp({ pages, dataDir: dataDir(), dist: WEB_DIST }).listen(port(), LISTEN_HOST, () => {
   console.log(`[boot] personal-homepage ${version()} on http://localhost:${port()}, pages in ${dataDir()}`);
   stopOnSignals(server);
 });

@@ -3,16 +3,33 @@ fragment ItemFields on Item {
   kind
   title
   url
+  opensIn
   icon
+  iconUrl
   description
   frameHeightPx
+  checkEnabled
+  checkUrl
+}
+
+fragment SectionFields on Section {
+  id
+  title
+  collapsed
+  items {
+    ...ItemFields
+  }
 }
 
 fragment PageFields on Page {
   slug
   title
   icon
+  iconUrl
   isHome
+  sections {
+    ...SectionFields
+  }
   items {
     ...ItemFields
   }
@@ -28,6 +45,7 @@ query PageLimits {
   pageLimits {
     maxPages
     maxItemsPerPage
+    maxSectionsPerPage
     maxTitleLength
     maxDescriptionLength
     maxUrlLength
@@ -60,8 +78,8 @@ mutation MovePage($slug: ID!, $toIndex: Int!) {
   }
 }
 
-mutation AddItem($pageSlug: ID!, $input: ItemInput!) {
-  addItem(pageSlug: $pageSlug, input: $input) {
+mutation AddItem($pageSlug: ID!, $sectionId: ID, $input: ItemInput!) {
+  addItem(pageSlug: $pageSlug, sectionId: $sectionId, input: $input) {
     ...PageFields
   }
 }
@@ -78,8 +96,32 @@ mutation RemoveItem($pageSlug: ID!, $id: ID!) {
   }
 }
 
-mutation MoveItem($pageSlug: ID!, $id: ID!, $toIndex: Int!) {
-  moveItem(pageSlug: $pageSlug, id: $id, toIndex: $toIndex) {
+mutation MoveItem($pageSlug: ID!, $id: ID!, $toSectionId: ID, $toIndex: Int!) {
+  moveItem(pageSlug: $pageSlug, id: $id, toSectionId: $toSectionId, toIndex: $toIndex) {
+    ...PageFields
+  }
+}
+
+mutation AddSection($pageSlug: ID!, $input: SectionInput!) {
+  addSection(pageSlug: $pageSlug, input: $input) {
+    ...PageFields
+  }
+}
+
+mutation UpdateSection($pageSlug: ID!, $id: ID!, $input: SectionInput!) {
+  updateSection(pageSlug: $pageSlug, id: $id, input: $input) {
+    ...PageFields
+  }
+}
+
+mutation RemoveSection($pageSlug: ID!, $id: ID!) {
+  removeSection(pageSlug: $pageSlug, id: $id) {
+    ...PageFields
+  }
+}
+
+mutation MoveSection($pageSlug: ID!, $id: ID!, $toIndex: Int!) {
+  moveSection(pageSlug: $pageSlug, id: $id, toIndex: $toIndex) {
     ...PageFields
   }
 }

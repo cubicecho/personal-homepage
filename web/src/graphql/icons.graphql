@@ -1,0 +1,8 @@
+query IconSearch($query: String!, $limit: Int) {
+  iconSearch(query: $query, limit: $limit) {
+    ref
+    label
+    source
+    url
+  }
+}

@@ -2,7 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import type { Server } from 'node:http';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { type ItemFields, ItemKind } from '../server/pages/page.ts';
+import { type ItemFields, ItemKind, OpensIn } from '../server/pages/page.ts';
 
 /**
  * Makes an empty directory for one test file's data.
@@ -26,9 +26,11 @@ export function linkFields(title: string, overrides: Partial<ItemFields> = {}): 
     kind: ItemKind.Link,
     title,
     url: 'http://nas.local:8096',
+    opensIn: OpensIn.NewTab,
     icon: null,
     description: null,
     frameHeightPx: null,
+    check: { enabled: true, url: null },
     ...overrides,
   };
 }

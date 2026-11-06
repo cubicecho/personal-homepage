@@ -1,16 +1,17 @@
 import { useState } from 'react';
-import type { Icon, ItemInput, ItemKind } from '@/__generated__/graphql';
-import { InputField, NumberField, TextareaField, useAppForm } from '@/components/app-form';
+import type { ItemInput, ItemKind, OpensIn } from '@/__generated__/graphql';
+import { InputField, NumberField, SelectField, SwitchField, TextareaField, useAppForm } from '@/components/app-form';
 import { DialogLayout } from '@/components/dialog-layout';
 import { RadioGroupField, type RadioOption } from '@/components/radio-group-field';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { FormElement } from '@/components/ui/form-element';
+import { FrameCheckNotice } from '@/frames/frame-check-notice';
 import { messageOf } from '@/lib/error-message';
 import { checkFrameHeight, checkLength, checkTitle, checkUrl } from './form-checks';
 import { IconField } from './icon-field';
-import { ITEM_KINDS } from './item-kinds';
-import { type Item, type Page, useAddItem, usePageLimits, useUpdateItem } from './use-pages';
+import { ITEM_KINDS, OPENS_IN } from './item-kinds';
+import { type Item, type Page, sectionLabel, useAddItem, usePageLimits, useUpdateItem } from './use-pages';
 
 interface ItemDialogProps {
   open: boolean;
@@ -19,16 +20,23 @@ interface ItemDialogProps {
   page: Page;
   /** The item to edit. Left out, the dialog adds one. */
   item?: Item | undefined;
+  /** The section a new item goes in, when the page has several. Left out, the first. */
+  sectionId?: string | undefined;
 }
 
 /** What the form holds. */
 interface ItemDraft {
   kind: ItemKind;
+  opensIn: OpensIn;
   title: string;
   url: string;
-  icon: Icon | null;
+  icon: string | null;
   description: string;
   frameHeightPx: number | null;
+  /** The section a new item goes in. Unused when editing. */
+  sectionId: string;
+  checkEnabled: boolean;
+  checkUrl: string;
 }
 
 const KIND_OPTIONS: readonly RadioOption[] = Object.entries(ITEM_KINDS).map(([kind, { Glyph, label, summary }]) => ({
@@ -38,41 +46,60 @@ const KIND_OPTIONS: readonly RadioOption[] = Object.entries(ITEM_KINDS).map(([ki
   iconSlot: <Glyph />,
 }));
 
+const OPENS_IN_OPTIONS: readonly RadioOption[] = Object.entries(OPENS_IN).map(
+  ([opensIn, { Glyph, label, summary }]) => ({
+    value: opensIn,
+    label,
+    description: summary,
+    iconSlot: <Glyph />,
+  }),
+);
+
 /**
  * Turns the form's values into the API's input.
  *
  * @param draft - The form's values.
- * @returns The input: trimmed, a blank description as null, and the height only for a frame.
+ * @returns The input: trimmed, a blank description as null, and the height only for a frame. The check
+ * address is kept while checking is off, so turning it back on finds it again.
  */
 function toInput(draft: ItemDraft): ItemInput {
   const description = draft.description.trim();
   const isFrame = draft.kind === 'FRAME';
   return {
     kind: draft.kind,
+    opensIn: isFrame ? null : draft.opensIn,
     title: draft.title.trim(),
     url: draft.url.trim(),
     icon: draft.icon,
     description: description === '' ? null : description,
     frameHeightPx: isFrame ? draft.frameHeightPx : null,
+    checkEnabled: draft.checkEnabled,
+    checkUrl: draft.checkUrl.trim(),
   };
 }
 
 /** Adds an item to a page, or changes one. */
-export function ItemDialog({ open, onOpenChange, page, item }: ItemDialogProps) {
+export function ItemDialog({ open, onOpenChange, page, item, sectionId }: ItemDialogProps) {
   const limits = usePageLimits().data;
   const addItem = useAddItem();
   const updateItem = useUpdateItem();
   const [serverError, setServerError] = useState<string | undefined>(undefined);
   const isEdit = item !== undefined;
+  const shouldPickSection = isEdit === false && page.sections.length > 1;
+  const sectionOptions = page.sections.map((section) => ({ value: section.id, label: sectionLabel(section) }));
   const heightBounds = limits && { min: limits.minFrameHeightPx, max: limits.maxFrameHeightPx };
 
   const defaultValues: ItemDraft = {
     kind: item?.kind ?? 'LINK',
+    opensIn: item?.opensIn ?? 'NEW_TAB',
     title: item?.title ?? '',
     url: item?.url ?? '',
     icon: item?.icon ?? null,
     description: item?.description ?? '',
     frameHeightPx: item?.frameHeightPx ?? null,
+    sectionId: sectionId ?? page.sections[0]?.id ?? '',
+    checkEnabled: item?.checkEnabled ?? true,
+    checkUrl: item?.checkUrl ?? '',
   };
   const form = useAppForm({
     defaultValues,
@@ -83,7 +110,7 @@ export function ItemDialog({ open, onOpenChange, page, item }: ItemDialogProps) 
         if (isEdit) {
           await updateItem.mutateAsync({ pageSlug: page.slug, id: item.id, input });
         } else {
-          await addItem.mutateAsync({ pageSlug: page.slug, input });
+          await addItem.mutateAsync({ pageSlug: page.slug, sectionId: value.sectionId || null, input });
         }
         onOpenChange(false);
       } catch (error) {
@@ -101,6 +128,9 @@ export function ItemDialog({ open, onOpenChange, page, item }: ItemDialogProps) 
       hasUnsavedChanges={() => form.state.isDefaultValue === false}
       contentSlot={
         <FormElement onSubmit={() => form.handleSubmit()}>
+          {shouldPickSection ? (
+            <SelectField form={form} name="sectionId" label="Section" options={sectionOptions} />
+          ) : null}
           <RadioGroupField form={form} name="kind" label="Kind" variant="card" options={KIND_OPTIONS} />
           <InputField
             form={form}
@@ -134,6 +164,13 @@ export function ItemDialog({ open, onOpenChange, page, item }: ItemDialogProps) 
           />
           <form.Subscribe selector={(state) => state.values.kind}>
             {(kind) =>
+              kind === 'LINK' ? (
+                <RadioGroupField form={form} name="opensIn" label="Opens" variant="card" options={OPENS_IN_OPTIONS} />
+              ) : null
+            }
+          </form.Subscribe>
+          <form.Subscribe selector={(state) => state.values.kind}>
+            {(kind) =>
               kind === 'FRAME' ? (
                 <NumberField
                   form={form}
@@ -149,7 +186,54 @@ export function ItemDialog({ open, onOpenChange, page, item }: ItemDialogProps) 
               ) : null
             }
           </form.Subscribe>
-          <IconField form={form} name="icon" label="Icon" />
+          <form.Subscribe selector={(state) => state.values}>
+            {({ kind, opensIn, url }) =>
+              kind === 'FRAME' || opensIn === 'APP' ? (
+                <FrameCheckNotice
+                  url={url}
+                  isTyping
+                  actionSlot={
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      content="Open it in a new tab instead"
+                      onClick={() => {
+                        form.setFieldValue('kind', 'LINK');
+                        form.setFieldValue('opensIn', 'NEW_TAB');
+                      }}
+                    />
+                  }
+                />
+              ) : null
+            }
+          </form.Subscribe>
+          <IconField form={form} name="icon" label="Icon" allowFavicon />
+          <SwitchField
+            form={form}
+            name="checkEnabled"
+            label="Check status"
+            description="The server checks the address every half minute and shows whether it answers."
+          />
+          <form.Subscribe selector={(state) => state.values.checkEnabled}>
+            {(checkEnabled) =>
+              checkEnabled ? (
+                <InputField
+                  form={form}
+                  name="checkUrl"
+                  label="Check address instead"
+                  type="url"
+                  inputMode="url"
+                  autoCapitalize="none"
+                  spellCheck={false}
+                  placeholder="http://nas.local:8096/health"
+                  description="Optional. A health endpoint, or an address the server can reach when the main one needs a sign-in."
+                  validators={{
+                    onChange: ({ value }) => (value.trim() === '' ? undefined : checkUrl(value, limits?.maxUrlLength)),
+                  }}
+                />
+              ) : null
+            }
+          </form.Subscribe>
           {serverError === undefined ? null : (
             <Alert variant="destructive" title="Not saved" description={serverError} />
           )}
