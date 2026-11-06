@@ -1,58 +1,23 @@
+import type { ReactNode } from 'react';
 import { useCanEdit } from '@/auth/use-access';
 import { Disclosure } from '@/components/disclosure';
 import { EmptyState } from '@/components/empty-state';
 import { Button } from '@/components/ui/button';
 import { Plus } from '@/components/ui/icons';
+import { cn } from '@/lib/utils';
+import { SECTION_GRID, SPAN_CLASSES } from '@/pages/column-span';
 import { ItemFrame } from '@/pages/item-frame';
 import { ItemMenu } from '@/pages/item-menu';
 import { ItemTile } from '@/pages/item-tile';
-import { type AddressedItem, hasAddress, type Item, type Page, type Section } from '@/pages/use-pages';
+import { hasAddress, type Item, type Page, type Section } from '@/pages/use-pages';
 import { WidgetCard } from '@/widgets/widget-card';
 import { useSectionOpen } from './fold-state';
 import { SectionMenu } from './section-menu';
-
-/** A run of consecutive items drawn the same way: tiles share a grid, a frame or a widget stands alone. */
-type Segment =
-  | { kind: 'tiles'; entries: IndexedItem<AddressedItem>[] }
-  | { kind: 'frame'; entry: IndexedItem<AddressedItem> }
-  | { kind: 'widget'; entry: IndexedItem };
 
 /** An item and where it sits in its section. */
 interface IndexedItem<T extends Item = Item> {
   item: T;
   index: number;
-}
-
-/**
- * Groups a section's items for drawing: consecutive tiles into one grid, each frame and widget on its own.
- *
- * @param items - The section's items, in order.
- * @returns The segments, in order.
- */
-function segmentsOf(items: readonly Item[]): Segment[] {
-  const segments: Segment[] = [];
-  items.forEach((item, index) => {
-    if (item.kind === 'WIDGET') {
-      segments.push({ kind: 'widget', entry: { item, index } });
-      return;
-    }
-    // Links and frames always have an address; the check only tells the type so.
-    if (hasAddress(item) === false) {
-      return;
-    }
-    const entry = { item, index };
-    if (item.kind === 'FRAME') {
-      segments.push({ kind: 'frame', entry });
-      return;
-    }
-    const last = segments.at(-1);
-    if (last?.kind === 'tiles') {
-      last.entries.push(entry);
-    } else {
-      segments.push({ kind: 'tiles', entries: [entry] });
-    }
-  });
-  return segments;
 }
 
 interface SectionViewProps {
@@ -112,7 +77,7 @@ interface SectionItemsProps {
   onEditItem: (item: Item) => void;
 }
 
-/** A section's items as tile grids, frames and widgets, or one line saying it is empty. */
+/** A section's items in one grid: tiles one column wide, frames and widgets their chosen width; or one line saying it is empty. */
 function SectionItems({ page, section, canEdit, onAddItem, onEditItem }: SectionItemsProps) {
   if (section.items.length === 0) {
     return (
@@ -138,35 +103,39 @@ function SectionItems({ page, section, canEdit, onAddItem, onEditItem }: Section
     canEdit ? (
       <ItemMenu page={page} section={section} item={item} index={index} onEdit={() => onEditItem(item)} />
     ) : null;
-  const label = section.title === null ? `${page.title} tiles` : `${section.title} tiles`;
+  const label = section.title === null ? `${page.title} items` : `${section.title} items`;
+
+  /**
+   * Draws one item the way its kind is drawn: a link as a tile, a frame inline, a widget as its data.
+   *
+   * @param entry - The item and its place.
+   * @returns The item's card, or null for a link or frame that somehow has no address.
+   */
+  const cardFor = (entry: IndexedItem): ReactNode => {
+    const { item } = entry;
+    if (item.kind === 'WIDGET') {
+      return <WidgetCard page={page} item={item} menuSlot={menuFor(entry)} />;
+    }
+    // Links and frames always have an address; the check only tells the type so.
+    if (hasAddress(item) === false) {
+      return null;
+    }
+    return item.kind === 'FRAME' ? (
+      <ItemFrame item={item} menuSlot={menuFor(entry)} />
+    ) : (
+      <ItemTile page={page} item={item} menuSlot={menuFor(entry)} />
+    );
+  };
 
   return (
-    <div className="flex flex-col gap-3">
-      {segmentsOf(section.items).map((segment) => {
-        if (segment.kind === 'widget') {
-          return (
-            <WidgetCard
-              key={segment.entry.item.id}
-              page={page}
-              item={segment.entry.item}
-              menuSlot={menuFor(segment.entry)}
-            />
-          );
-        }
-        return segment.kind === 'frame' ? (
-          <ItemFrame key={segment.entry.item.id} item={segment.entry.item} menuSlot={menuFor(segment.entry)} />
-        ) : (
-          <ul
-            key={segment.entries[0]?.item.id}
-            aria-label={label}
-            className="grid grid-cols-[repeat(auto-fill,minmax(15rem,1fr))] gap-3"
-          >
-            {segment.entries.map((entry) => (
-              <ItemTile key={entry.item.id} page={page} item={entry.item} menuSlot={menuFor(entry)} />
-            ))}
-          </ul>
-        );
-      })}
+    <div className="@container w-full">
+      <ul aria-label={label} className={SECTION_GRID}>
+        {section.items.map((item, index) => (
+          <li key={item.id} className={cn('min-w-0', SPAN_CLASSES[item.columnSpan])}>
+            {cardFor({ item, index })}
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

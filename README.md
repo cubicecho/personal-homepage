@@ -11,6 +11,10 @@ A self-hosted start page for your network. Every edit is made in the web app.
   - **Frames** show a service inline on the page, at a height you set.
   - **Widgets** show data the server fetches: values picked out of a JSON API, a feed's latest entries, or the
     weather. See [Widgets](#widgets).
+- **Widths:** a section's items sit in one grid of up to four columns, fewer on a narrower screen and one on a
+  phone. A tile takes one column. A frame (full width by default) or a widget (two columns by default) can take 1 to
+  4 columns or the full width: **Width** in its dialog, or `columnSpan: 3` / `columnSpan: full` in an exported
+  page.
 - **Status dots** on items show whether each service answers, checked by the server.
 - **Search:** press Ctrl+K (or ⌘K), or `/`, or just start typing anywhere. It finds items and pages on every
   page, opens addresses, and sends anything else to a web search. Start with `!g` or another prefix to pick the

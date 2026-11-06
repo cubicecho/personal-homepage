@@ -8,6 +8,7 @@ fragment ItemFields on Item {
   iconUrl
   description
   frameHeightPx
+  columnSpan
   checkEnabled
   checkUrl
   visibleTo
