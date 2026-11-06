@@ -2,7 +2,7 @@ import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import express, { type Express } from 'express';
 import { createYoga } from 'graphql-yoga';
-import { isProduction, trustProxy } from '../core/config.ts';
+import { isProduction, trustProxy, weatherApiUrl } from '../core/config.ts';
 import type { Context, Services } from '../core/context.ts';
 import { HTTP_DEFAULTS } from '../core/defaults.ts';
 import { mountExport } from '../export/zip-export.ts';
@@ -13,6 +13,7 @@ import { schema } from '../graphql/schema.ts';
 import { mountIcons } from '../icons/http.ts';
 import { createIconService } from '../icons/icon-service.ts';
 import { createStatusChecker } from '../status/status-checker.ts';
+import { createWidgetService } from '../widgets/widget-service.ts';
 import { healthHandler } from './health.ts';
 
 const GRAPHQL_ENDPOINT = '/graphql';
@@ -48,6 +49,7 @@ export function createApp({ dataDir, dist, checkDatabase, ...deps }: AppDeps): E
     status: deps.status ?? createStatusChecker(),
     frames: deps.frames ?? createFrameChecker(),
     icons: deps.icons ?? createIconService({ dataDir }),
+    widgets: deps.widgets ?? createWidgetService({ weatherApiUrl: weatherApiUrl() }, { dataDir }),
   };
   const yoga = createYoga<Record<string, never>, Context>({
     schema,

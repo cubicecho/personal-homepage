@@ -57,8 +57,9 @@ export const items = pgTable(
     id: text('id').notNull(),
     kind: text('kind').notNull(),
     title: text('title').notNull(),
-    url: text('url').notNull(),
-    /** null for a frame. */
+    /** null only for a widget, whose link is optional. */
+    url: text('url'),
+    /** null for a frame or a widget. */
     opensIn: text('opens_in'),
     icon: text('icon'),
     description: text('description'),
@@ -66,7 +67,10 @@ export const items = pgTable(
     frameHeightPx: integer('frame_height_px'),
     checkEnabled: boolean('check_enabled').notNull().default(true),
     checkUrl: text('check_url'),
-    /** Reserved for widget items (issue #2): their type and settings, as the widgets feature defines them. */
+    /**
+     * A widget's type and settings, in the same mapping its YAML form uses (`widgetToDisk`), so it is read back
+     * through the same checks. Secret references are kept as written. null for the other kinds.
+     */
     widget: jsonb('widget').$type<Record<string, unknown>>(),
     position: integer('position').notNull(),
   },
@@ -78,7 +82,9 @@ export const items = pgTable(
       foreignColumns: [sections.pageSlug, sections.id],
     }).onDelete('cascade'),
     index('idx_items_page_slug_section_id').on(table.pageSlug, table.sectionId),
-    check('ck_items_kind', sql`${table.kind} in ('LINK', 'FRAME')`),
+    check('ck_items_kind', sql`${table.kind} in ('LINK', 'FRAME', 'WIDGET')`),
+    check('ck_items_url', sql`${table.url} is not null or ${table.kind} = 'WIDGET'`),
+    check('ck_items_widget', sql`(${table.widget} is not null) = (${table.kind} = 'WIDGET')`),
     check('ck_items_opens_in', sql`${table.opensIn} is null or ${table.opensIn} in ('NEW_TAB', 'SAME_TAB', 'APP')`),
   ],
 );

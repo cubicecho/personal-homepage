@@ -11,8 +11,10 @@ import type { Database } from '../db/client.ts';
 import { type ItemRow, items, type PageRow, pages, type SectionRow, sections } from '../db/schema.ts';
 import { HOME_SLUG, type Item, ItemKind, OpensIn, type Page, type PageStore } from './page.ts';
 import * as edits from './page-edits.ts';
-import { SLUG_PATTERN } from './page-input.ts';
+import { describeIssues, SLUG_PATTERN } from './page-input.ts';
 import { slugFrom, uniqueSlug } from './slug.ts';
+import type { Widget } from './widget.ts';
+import { diskWidgetSchema, widgetFromDisk, widgetToDisk } from './widget-disk.ts';
 import { emptySection } from './yaml-format.ts';
 
 const { maxPages } = PAGE_LIMIT_DEFAULTS;
@@ -47,6 +49,25 @@ function memberOf<T extends string>(values: readonly T[], value: string): T {
 }
 
 /**
+ * Reads a widget column back into the model, through the same checks its YAML form gets.
+ *
+ * @param row - The item row.
+ * @returns The widget, or null when the row holds none.
+ * @throws When a stored widget no longer reads; only a hand-edited row could hold one.
+ */
+function widgetFromRow(row: ItemRow): Widget | null {
+  if (row.widget === null) {
+    return null;
+  }
+  const parsed = diskWidgetSchema.safeParse(row.widget);
+  const widget = parsed.success ? widgetFromDisk(parsed.data) : describeIssues(parsed.error);
+  if (typeof widget === 'string') {
+    throw new Error(`The widget of item "${row.id}" on page "${row.pageSlug}" can't be read: ${widget}`);
+  }
+  return widget;
+}
+
+/**
  * Turns an item row into the model.
  *
  * @param row - The row.
@@ -63,6 +84,7 @@ function itemFromRow(row: ItemRow): Item {
     description: row.description,
     frameHeightPx: row.frameHeightPx,
     check: { enabled: row.checkEnabled, url: row.checkUrl },
+    widget: widgetFromRow(row),
   };
 }
 
@@ -200,6 +222,8 @@ export async function writePage(tx: Transaction, page: Page): Promise<Page> {
       frameHeightPx: item.frameHeightPx,
       checkEnabled: item.check.enabled,
       checkUrl: item.check.url,
+      // The YAML mapping, secret references as written: never a resolved value.
+      widget: item.widget === null ? null : widgetToDisk(item.widget),
     })),
   );
   if (itemRows.length > 0) {

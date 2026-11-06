@@ -5,6 +5,8 @@ import type { OpenedDatabase } from '../../server/db/client.ts';
 import { items, pages } from '../../server/db/schema.ts';
 import { createDbPageStore } from '../../server/pages/db-page-store.ts';
 import { HOME_SLUG, ItemKind, itemsOf, OpensIn, type PageStore } from '../../server/pages/page.ts';
+import { parseWidget } from '../../server/pages/page-input.ts';
+import { HttpMethod, ValueFormat, WeatherUnits, type Widget, WidgetType } from '../../server/pages/widget.ts';
 import { openTestDatabase, resetTestDatabase } from '../db.ts';
 import { linkFields } from '../helpers.ts';
 
@@ -153,6 +155,63 @@ describe('database page store', () => {
       description: null,
       frameHeightPx: PAGE_LIMIT_DEFAULTS.defaultFrameHeightPx,
       check: { enabled: false, url: null },
+      widget: null,
+    });
+  });
+
+  describe('widgets', () => {
+    const queue = parseWidget({
+      type: WidgetType.Api,
+      refreshSeconds: 60,
+      api: {
+        url: 'http://sonarr.lan:8989/api/v3/queue',
+        method: HttpMethod.Post,
+        headers: [{ name: 'X-Api-Key', value: '${env:HOMEPAGE_SONARR_KEY}' }],
+        body: '{"page": 1}',
+        fields: [
+          { label: 'Downloading', path: '$.totalRecords', format: ValueFormat.Number, warnAbove: 10 },
+          { label: 'First', path: '$.records[0].title' },
+        ],
+      },
+    });
+    const weather = parseWidget({
+      type: WidgetType.Weather,
+      cacheSeconds: 600,
+      weather: { latitude: 52.37, longitude: 4.89, units: WeatherUnits.Imperial },
+    });
+    const widgetFields = (title: string, widget: Widget, url: string | null = null) =>
+      linkFields(title, { kind: ItemKind.Widget, url, opensIn: null, check: { enabled: false, url: null }, widget });
+
+    it('keeps every widget setting, with no URL, and reads it back the same', async () => {
+      await store.addItem(HOME_SLUG, null, widgetFields('Sonarr queue', queue));
+      const page = await store.addItem(HOME_SLUG, null, widgetFields('Weather', weather, 'https://open-meteo.com/'));
+      expect(itemsOf(page).map((item) => item.widget)).toEqual([queue, weather]);
+      expect(itemsOf(page)[0]?.url).toBeNull();
+      const reopened = await createDbPageStore(database.db);
+      expect(await reopened.find(HOME_SLUG)).toEqual(page);
+    });
+
+    it('stores secret references as written, in the YAML mapping, never a value', async () => {
+      await store.addItem(HOME_SLUG, null, widgetFields('Sonarr queue', queue));
+      const [row] = await database.db.select({ widget: items.widget }).from(items);
+      expect(row?.widget).toMatchObject({
+        type: 'api',
+        method: 'post',
+        headers: { 'X-Api-Key': '${env:HOMEPAGE_SONARR_KEY}' },
+      });
+    });
+
+    it('refuses, at the table, a widget row without settings and a link without a URL', async () => {
+      await expect(
+        database.db.execute(
+          sql`insert into items (page_slug, section_id, id, kind, title, position) values ('home', 'main', 'w', 'WIDGET', 'W', 0)`,
+        ),
+      ).rejects.toThrow();
+      await expect(
+        database.db.execute(
+          sql`insert into items (page_slug, section_id, id, kind, title, position) values ('home', 'main', 'l', 'LINK', 'L', 0)`,
+        ),
+      ).rejects.toThrow();
     });
   });
 

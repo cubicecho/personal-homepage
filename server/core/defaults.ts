@@ -96,6 +96,20 @@ export interface PageLimitSettings {
   maxFrameHeightPx: number;
   /** A frame item's height when none is given, in CSS pixels. */
   defaultFrameHeightPx: number;
+  /** Most value rows one API widget shows. */
+  maxWidgetFields: number;
+  /** Most headers one API widget sends. */
+  maxWidgetHeaders: number;
+  /** Most entries an RSS widget shows. */
+  maxRssEntries: number;
+  /** Shortest a widget's answer may be cached, in seconds. */
+  minWidgetCacheSeconds: number;
+  /** Longest a widget's answer may be cached, in seconds. */
+  maxWidgetCacheSeconds: number;
+  /** Shortest interval a browser may refresh a widget at, in seconds. */
+  minWidgetRefreshSeconds: number;
+  /** Longest API widget request body, in characters. */
+  maxWidgetBodyLength: number;
 }
 
 export const PAGE_LIMIT_DEFAULTS: Readonly<PageLimitSettings> = Object.freeze({
@@ -109,6 +123,13 @@ export const PAGE_LIMIT_DEFAULTS: Readonly<PageLimitSettings> = Object.freeze({
   minFrameHeightPx: 120,
   maxFrameHeightPx: 2000,
   defaultFrameHeightPx: 480,
+  maxWidgetFields: 6,
+  maxWidgetHeaders: 10,
+  maxRssEntries: 20,
+  minWidgetCacheSeconds: 10,
+  maxWidgetCacheSeconds: 86_400,
+  minWidgetRefreshSeconds: 15,
+  maxWidgetBodyLength: 4096,
 });
 
 /** How item statuses are checked (server/status/). */
@@ -201,4 +222,56 @@ export const SEARCH_DEFAULTS: Readonly<SearchSettings> = Object.freeze({
     Object.freeze({ prefix: 'w', name: 'Wikipedia', url: 'https://en.wikipedia.org/w/index.php?search={query}' }),
   ]),
   defaultPrefix: 'd',
+});
+
+/** How widgets fetch their data (server/widgets/). */
+export interface WidgetSettings {
+  /** How long one fetch may take, in seconds. */
+  timeoutSeconds: number;
+  /** Largest response a widget reads, in bytes. */
+  maxResponseBytes: number;
+  /** Largest raw JSON an API widget's test shows, in characters. */
+  maxPreviewRawChars: number;
+  /** An API widget's cache time when none is given, in seconds. */
+  defaultApiCacheSeconds: number;
+  /** An RSS widget's cache time when none is given, in seconds. */
+  defaultRssCacheSeconds: number;
+  /** A weather widget's cache time when none is given, in seconds. */
+  defaultWeatherCacheSeconds: number;
+  /** How many entries an RSS widget shows when none is given. */
+  defaultRssEntries: number;
+  /** Longest summary an RSS entry keeps, in characters. */
+  maxRssSummaryChars: number;
+  /** Longest value an API widget row shows, in characters. */
+  maxApiValueChars: number;
+  /** How many coming hours a weather widget shows. */
+  weatherHours: number;
+  /** The Open-Meteo forecast endpoint. `WEATHER_API_URL` overrides it, for a self-hosted Open-Meteo. */
+  weatherApiUrl: string;
+  /** What a `${env:NAME}` secret's name must start with, so a widget can only read variables meant for it. */
+  secretEnvPrefix: string;
+  /** Directories a `${file:/path}` secret may be read from, besides `<dataDir>/secrets`. */
+  secretFileDirs: readonly string[];
+  /** Largest secret file read, in bytes. */
+  maxSecretFileBytes: number;
+  /** Most widget answers kept in memory. */
+  maxCachedAnswers: number;
+}
+
+export const WIDGET_DEFAULTS: Readonly<WidgetSettings> = Object.freeze({
+  timeoutSeconds: 10,
+  maxResponseBytes: 1_048_576,
+  maxPreviewRawChars: 16_384,
+  defaultApiCacheSeconds: 60,
+  defaultRssCacheSeconds: 900,
+  defaultWeatherCacheSeconds: 900,
+  defaultRssEntries: 8,
+  maxRssSummaryChars: 280,
+  maxApiValueChars: 200,
+  weatherHours: 6,
+  weatherApiUrl: 'https://api.open-meteo.com/v1/forecast',
+  secretEnvPrefix: 'HOMEPAGE_',
+  secretFileDirs: Object.freeze(['/run/secrets']),
+  maxSecretFileBytes: 65_536,
+  maxCachedAnswers: 500,
 });

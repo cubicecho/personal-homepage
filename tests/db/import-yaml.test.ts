@@ -1,10 +1,12 @@
 import { mkdir, readdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { Mock } from 'vitest';
+import { PAGE_LIMIT_DEFAULTS } from '../../server/core/defaults.ts';
 import type { OpenedDatabase } from '../../server/db/client.ts';
 import { importedName, importYamlData, importYamlOnBoot } from '../../server/db/import-yaml.ts';
 import { createDbPageStore } from '../../server/pages/db-page-store.ts';
 import { HOME_SLUG, ItemKind, itemsOf, OpensIn, type PageStore } from '../../server/pages/page.ts';
+import { WidgetType } from '../../server/pages/widget.ts';
 import { readYamlData } from '../../server/pages/yaml-format.ts';
 import { createSiteSettings } from '../../server/site/site-settings.ts';
 import { openTestDatabase, resetTestDatabase } from '../db.ts';
@@ -52,6 +54,21 @@ const OLD_FILES: Record<string, string> = {
     '        check: http://nas.local/health',
   ].join('\n'),
   'pages/broken.yaml': 'title: [unclosed\n',
+  'pages/feeds.yaml': [
+    'title: Feeds',
+    'items:',
+    '  - title: Sonarr queue',
+    '    kind: widget',
+    '    widget:',
+    '      type: api',
+    '      url: http://sonarr.lan:8989/api/v3/queue',
+    '      headers: { X-Api-Key: "${env:HOMEPAGE_SONARR_KEY}" }',
+    '      fields: [{ label: Downloading, path: $.totalRecords, format: number }]',
+    '  - title: News',
+    '    kind: WIDGET',
+    '    url: https://example.com',
+    '    widget: { type: RSS, url: "https://example.com/feed", limit: 999 }',
+  ].join('\n'),
 };
 
 describe('importing YAML pages', () => {
@@ -83,10 +100,10 @@ describe('importing YAML pages', () => {
 
   afterEach(() => remove());
 
-  it('reads the 1.x formats: kind app, bare items, sections, check, hand edits', async () => {
+  it('reads the 1.x formats: kind app, bare items, sections, check, widgets, hand edits', async () => {
     await writeFiles(OLD_FILES);
     const data = await readYamlData(dir);
-    expect(data.pages.map((page) => page.slug)).toEqual([HOME_SLUG, 'tools', 'media']);
+    expect(data.pages.map((page) => page.slug)).toEqual([HOME_SLUG, 'tools', 'media', 'feeds']);
     expect(data.skipped.map((skip) => skip.file)).toEqual(['pages/broken.yaml']);
     expect(data.search).toEqual({ defaultPrefix: 'g' });
 
@@ -112,19 +129,43 @@ describe('importing YAML pages', () => {
     ]);
   });
 
+  it('imports widgets with their settings, secret references as written', async () => {
+    await writeFiles(OLD_FILES);
+    await importYamlData(database.db, await readYamlData(dir), { replace: false });
+    const feeds = await store.find('feeds');
+    expect(feeds === null ? [] : itemsOf(feeds)).toMatchObject([
+      {
+        id: 'sonarr-queue',
+        kind: ItemKind.Widget,
+        url: null,
+        check: { enabled: false },
+        widget: {
+          type: WidgetType.Api,
+          api: { headers: [{ name: 'X-Api-Key', value: '${env:HOMEPAGE_SONARR_KEY}' }] },
+        },
+      },
+      {
+        id: 'news',
+        url: 'https://example.com',
+        widget: { type: WidgetType.Rss, rss: { limit: PAGE_LIMIT_DEFAULTS.maxRssEntries } },
+      },
+    ]);
+  });
+
   it('imports on first boot, in one go, then renames the files so it never imports twice', async () => {
     await writeFiles(OLD_FILES);
-    expect(await importYamlOnBoot(database.db, dir, log, () => AT)).toBe(3);
+    expect(await importYamlOnBoot(database.db, dir, log, () => AT)).toBe(4);
 
     expect((await store.list()).map((page) => [page.slug, page.title])).toEqual([
       [HOME_SLUG, 'Start'],
       ['tools', 'Tools'],
       ['media', 'Media'],
+      ['feeds', 'Feeds'],
     ]);
     const engines = await createSiteSettings(database.db).searchEngines();
     expect(engines.find((engine) => engine.isDefault)?.prefix).toBe('g');
     expect(log.warn).toHaveBeenCalledWith(expect.stringContaining('left out pages/broken.yaml'));
-    expect(log.log).toHaveBeenCalledWith(expect.stringContaining('imported 3 pages'));
+    expect(log.log).toHaveBeenCalledWith(expect.stringContaining('imported 4 pages'));
 
     expect((await readdir(dir)).sort()).toEqual([importedName('pages', AT), importedName('site.yaml', AT)].sort());
     expect(importedName('site.yaml', AT)).toBe('site.imported-2026-11-06T03-25-00-000Z.yaml');
@@ -154,9 +195,9 @@ describe('importing YAML pages', () => {
     expect(await store.find('mine')).not.toBeNull();
 
     const result = await importYamlData(database.db, data, { replace: true });
-    expect(result.imported).toBe(3);
+    expect(result.imported).toBe(4);
     expect(await store.find('mine')).toBeNull();
-    expect((await store.list()).map((page) => page.slug)).toEqual([HOME_SLUG, 'tools', 'media']);
+    expect((await store.list()).map((page) => page.slug)).toEqual([HOME_SLUG, 'tools', 'media', 'feeds']);
   });
 
   it('adds a fresh home page when the YAML has none, and leaves out search settings that do not fit', async () => {

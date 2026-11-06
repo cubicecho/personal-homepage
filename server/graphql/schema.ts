@@ -6,10 +6,26 @@ import { badInput, notFound } from '../core/errors.ts';
 import type { FrameCheckResult } from '../frames/frame-check.ts';
 import type { IconOption } from '../icons/icon-service.ts';
 import { HOME_SLUG, type Item, itemsOf, type Page, type Section } from '../pages/page.ts';
-import { isWebUrl, parseItemFields, parseNewPage, parsePagePatch, parseSectionFields } from '../pages/page-input.ts';
+import {
+  isWebUrl,
+  parseItemFields,
+  parseNewPage,
+  parsePagePatch,
+  parseSectionFields,
+  parseWidget,
+} from '../pages/page-input.ts';
+import { WidgetType } from '../pages/widget.ts';
 import type { SearchEngine } from '../site/site-settings.ts';
 import type { ItemStatus } from '../status/status-checker.ts';
+import type { WidgetData, WidgetPreview, WidgetResult } from '../widgets/widget-result.ts';
 import { TYPE_DEFS } from './type-defs.ts';
+
+/** The GraphQL type of each widget type's result. */
+const RESULT_TYPE_NAMES: Readonly<Record<WidgetType, string>> = Object.freeze({
+  [WidgetType.Api]: 'ApiWidgetResult',
+  [WidgetType.Rss]: 'RssWidgetResult',
+  [WidgetType.Weather]: 'WeatherWidgetResult',
+});
 
 /** An item as resolvers pass it on: it knows its page, which its icon URL needs. */
 interface PlacedItem extends Item {
@@ -150,6 +166,50 @@ const resolvers = {
      */
     searchEngines: (_parent: unknown, _args: unknown, ctx: Context): Promise<SearchEngine[]> =>
       ctx.site.searchEngines(),
+    /**
+     * Resolves `Query.widgetData`.
+     *
+     * @param _parent - Unused.
+     * @param args - The page and the widget item.
+     * @param ctx - Request context.
+     * @returns The widget's latest data.
+     * @throws NOT_FOUND when the page has no such item, BAD_USER_INPUT when the item isn't a widget.
+     */
+    widgetData: async (
+      _parent: unknown,
+      args: { pageSlug: string; itemId: string },
+      ctx: Context,
+    ): Promise<WidgetData> => {
+      const page = await loadPage(ctx, args.pageSlug);
+      const item = itemsOf(page).find((candidate) => candidate.id === args.itemId);
+      if (item === undefined) {
+        throw notFound(`The page "${args.pageSlug}" has no item "${args.itemId}".`);
+      }
+      if (item.widget === null) {
+        throw badInput(`"${item.title}" is not a widget.`);
+      }
+      return ctx.widgets.dataFor(page.slug, item);
+    },
+    /**
+     * Resolves `Query.widgetPreview`.
+     *
+     * @param _parent - Unused.
+     * @param args - The widget as it would be saved.
+     * @param ctx - Request context.
+     * @returns Its result or failure, and an API widget's raw answer.
+     * @throws BAD_USER_INPUT when a setting is out of bounds.
+     */
+    widgetPreview: (_parent: unknown, args: InputArgs, ctx: Context): Promise<WidgetPreview> =>
+      ctx.widgets.preview(parseWidget(args.input)),
+  },
+  WidgetResult: {
+    /**
+     * Names the GraphQL type of a widget's result.
+     *
+     * @param result - The result.
+     * @returns `ApiWidgetResult`, `RssWidgetResult` or `WeatherWidgetResult`.
+     */
+    __resolveType: (result: WidgetResult): string => RESULT_TYPE_NAMES[result.type],
   },
   Page: {
     /**

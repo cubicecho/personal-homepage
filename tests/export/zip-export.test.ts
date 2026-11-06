@@ -8,7 +8,9 @@ import type { OpenedDatabase } from '../../server/db/client.ts';
 import { importYamlData } from '../../server/db/import-yaml.ts';
 import { EXPORT_PATH, exportFilename, mountExport } from '../../server/export/zip-export.ts';
 import { createDbPageStore } from '../../server/pages/db-page-store.ts';
-import { ItemKind, type PageStore } from '../../server/pages/page.ts';
+import { HOME_SLUG, ItemKind, type PageStore } from '../../server/pages/page.ts';
+import { parseWidget } from '../../server/pages/page-input.ts';
+import { WidgetType } from '../../server/pages/widget.ts';
 import { readYamlData } from '../../server/pages/yaml-format.ts';
 import { createSiteSettings, type SiteSettings } from '../../server/site/site-settings.ts';
 import { openTestDatabase, resetTestDatabase } from '../db.ts';
@@ -47,6 +49,18 @@ describe('zip export', () => {
       linkFields('Grafana', { kind: ItemKind.Frame, opensIn: null, frameHeightPx: 480 }),
     );
     await site.setSearch({ engines: [SEARX] });
+    const feed = parseWidget({ type: WidgetType.Rss, rss: { url: 'https://example.com/feed', limit: 5 } });
+    await pages.addItem(
+      HOME_SLUG,
+      null,
+      linkFields('News', {
+        kind: ItemKind.Widget,
+        url: null,
+        opensIn: null,
+        check: { enabled: false, url: null },
+        widget: feed,
+      }),
+    );
 
     const app = express();
     mountExport(app, { pages, site }, () => FIXED_DATE);
@@ -64,6 +78,18 @@ describe('zip export', () => {
     const files = await download();
     expect(Object.keys(files).sort()).toEqual(['pages/home.yaml', 'pages/media.yaml', 'site.yaml']);
     expect(parse(files['site.yaml'] ?? '')).toEqual({ pageOrder: ['media'], search: { engines: [SEARX] } });
+    expect(parse(files['pages/home.yaml'] ?? '')).toEqual({
+      title: 'Home',
+      icon: 'house',
+      items: [
+        {
+          id: 'news',
+          kind: 'widget',
+          title: 'News',
+          widget: { type: 'rss', url: 'https://example.com/feed', limit: 5 },
+        },
+      ],
+    });
     expect(parse(files['pages/media.yaml'] ?? '')).toEqual({
       title: 'Media',
       icon: 'film',

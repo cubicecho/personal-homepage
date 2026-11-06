@@ -31,6 +31,7 @@ export function linkFields(title: string, overrides: Partial<ItemFields> = {}): 
     description: null,
     frameHeightPx: null,
     check: { enabled: true, url: null },
+    widget: null,
     ...overrides,
   };
 }

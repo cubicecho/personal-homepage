@@ -5,10 +5,10 @@ import { ExternalLink, PanelsTopLeft } from '@/core/app-icons';
 import { iconElement } from '@/core/page-icons';
 import { ItemStatusDot } from '@/status/item-status-dot';
 import { useCurrentPageSlug } from '@/status/use-item-statuses';
-import type { Item } from './use-pages';
+import type { AddressedItem } from './use-pages';
 
 interface ItemFrameProps {
-  item: Item;
+  item: AddressedItem;
   /** The item's ⋯ menu, at the end of the card's header. */
   menuSlot: ReactNode;
 }

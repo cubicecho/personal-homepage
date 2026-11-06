@@ -4,7 +4,14 @@ import { useState } from 'react';
 import { EmptyState } from '@/components/empty-state';
 import { QueryState } from '@/components/query-state';
 import { RouteError } from '@/components/route-error';
-import { BarNavItem, Sidebar, SidebarNavItem, SidebarSection } from '@/components/sidebar';
+import {
+  BarNavItem,
+  Sidebar,
+  SidebarCollapseButton,
+  SidebarNavItem,
+  SidebarSection,
+  useSidebar,
+} from '@/components/sidebar';
 import { SidebarLayout } from '@/components/split-layout';
 import { Button } from '@/components/ui/button';
 import { Plus } from '@/components/ui/icons';
@@ -16,7 +23,10 @@ import { iconElement } from '@/core/page-icons';
 import { ExportButton } from '@/export/export-button';
 import { PageDialog } from '@/pages/page-dialog';
 import { type Page, usePages } from '@/pages/use-pages';
+import { commandKeyLabel } from '@/search/hotkeys';
 import { SearchButton, SearchProvider } from '@/search/search-launcher';
+import { ThemeMenu } from '@/shell/theme-menu';
+import { useSidebarFold } from '@/shell/use-sidebar-fold';
 
 const SidebarLink = createLink(SidebarNavItem);
 const BarLink = createLink(BarNavItem);
@@ -45,6 +55,55 @@ function Brand({ compact = false }: { compact?: boolean }) {
 }
 
 /**
+ * The sidebar's header: the brand and the search button, each its icon alone while the sidebar is folded.
+ *
+ * @returns The header's rows.
+ */
+function SidebarHeader() {
+  const { collapsed } = useSidebar();
+  return (
+    <div className={collapsed ? 'flex flex-col items-center gap-2' : 'flex flex-col gap-2'}>
+      <Brand compact={collapsed} />
+      <SearchButton variant={collapsed ? 'icon' : 'wide'} />
+    </div>
+  );
+}
+
+/**
+ * "New page" as a row of its own, for the folded sidebar: folded, the Pages section draws no title
+ * row, so its + button is gone.
+ *
+ * @param props - What the row does.
+ * @param props.label - What it is called.
+ * @param props.onPress - Opens the new-page dialog.
+ * @returns The row while folded, nothing while open.
+ */
+function FoldedNewPageRow({ label, onPress }: { label: string; onPress: () => void }) {
+  const { collapsed } = useSidebar();
+  return collapsed ? <SidebarNavItem label={label} iconSlot={<Plus />} onClick={onPress} /> : null;
+}
+
+/**
+ * The sidebar's footer: the zip download, the theme and the fold button, as icons while folded.
+ *
+ * @returns The footer's rows.
+ */
+function SidebarFooter() {
+  const { collapsed } = useSidebar();
+  const shortcut = `${commandKeyLabel()} B`;
+  return (
+    <div className={collapsed ? 'flex flex-col items-center gap-2' : 'flex flex-col gap-2'}>
+      <ExportButton compact={collapsed} />
+      {collapsed ? <ThemeMenu /> : <ThemePicker variant="compact" />}
+      <SidebarCollapseButton
+        collapseLabel={`Collapse sidebar (${shortcut})`}
+        expandLabel={`Expand sidebar (${shortcut})`}
+      />
+    </div>
+  );
+}
+
+/**
  * The glyph a page's row wears.
  *
  * @param page - The page the row is for.
@@ -69,6 +128,7 @@ function RootRoute() {
   const { slug } = useParams({ strict: false });
   const currentSlug = slug ?? 'home';
   const [isCreating, setIsCreating] = useState(false);
+  const [isFolded, setFolded] = useSidebarFold();
   const [createSession, setCreateSession] = useState(0);
 
   /** Opens a fresh new-page dialog. */
@@ -144,52 +204,47 @@ function RootRoute() {
         sidebarSlot={
           <Sidebar
             label="Main"
-            headerSlot={
-              <div className="flex flex-col gap-2">
-                <Brand />
-                <SearchButton variant="wide" />
-              </div>
-            }
+            collapsed={isFolded}
+            onCollapsedChange={setFolded}
+            headerSlot={<SidebarHeader />}
             contentSlot={
-              <SidebarSection
-                as="nav"
-                title="Pages"
-                actionSlot={
-                  <Button
-                    variant="outline"
-                    size="icon-xs"
-                    aria-label={newPageLabel}
-                    iconSlot={<Plus />}
-                    onClick={startCreating}
-                  />
-                }
-                status={
-                  <QueryState
-                    compact
-                    query={query}
-                    what="your pages"
-                    count={pages.length}
-                    emptySlot={<EmptyState compact title="No pages yet." className="px-2" />}
-                  />
-                }
-                contentSlot={pages.map((page) => (
-                  <SidebarLink
-                    key={page.slug}
-                    {...linkTo(page)}
-                    label={page.title}
-                    iconSlot={pageIcon(page)}
-                    count={page.items.length}
-                    active={page.slug === currentSlug}
-                  />
-                ))}
-              />
+              <>
+                <SidebarSection
+                  as="nav"
+                  title="Pages"
+                  actionSlot={
+                    <Button
+                      variant="outline"
+                      size="icon-xs"
+                      aria-label={newPageLabel}
+                      iconSlot={<Plus />}
+                      onClick={startCreating}
+                    />
+                  }
+                  status={
+                    <QueryState
+                      compact
+                      query={query}
+                      what="your pages"
+                      count={pages.length}
+                      emptySlot={<EmptyState compact title="No pages yet." className="px-2" />}
+                    />
+                  }
+                  contentSlot={pages.map((page) => (
+                    <SidebarLink
+                      key={page.slug}
+                      {...linkTo(page)}
+                      label={page.title}
+                      iconSlot={pageIcon(page)}
+                      count={page.items.length}
+                      active={page.slug === currentSlug}
+                    />
+                  ))}
+                />
+                <FoldedNewPageRow label={newPageLabel} onPress={startCreating} />
+              </>
             }
-            footerSlot={
-              <div className="flex flex-col gap-2">
-                <ExportButton />
-                <ThemePicker variant="compact" />
-              </div>
-            }
+            footerSlot={<SidebarFooter />}
           />
         }
         contentSlot={<Outlet />}

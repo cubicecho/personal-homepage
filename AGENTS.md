@@ -1,9 +1,10 @@
 # personal-homepage
 
 A self-hosted start page. Pages hold sections of items: links (tiles that open in a new tab, this tab, or framed
-across the content area) and frames (a service shown inline at a set height). Home is always first and can't be
-deleted. Pages are kept in a database: PGlite under `DATA_DIR/pg` by default, or Postgres when `DATABASE_URL` is a
-postgres:// URL. They are served over GraphQL to a React app built from the cubeui registry.
+across the content area), frames (a service shown inline at a set height) and widgets (data the server fetches: API
+values, a feed, the weather). Home is always first and can't be deleted. Pages are kept in a database: PGlite under
+`DATA_DIR/pg` by default, or Postgres when `DATABASE_URL` is a postgres:// URL. They are served over GraphQL to a
+React app built from the cubeui registry.
 
 ## Run
 
@@ -19,8 +20,9 @@ npm run db:import-yaml -- --data-dir examples/data --replace   # sample pages (s
 
 ## Layout
 
-- `server/core/`: config getters (`DATA_DIR`, `DATABASE_URL`, `DB_CONNECT_TIMEOUT_MS`, `PORT`, `TRUST_PROXY`), the
-  `defaults.ts` groups (`PAGE_LIMIT_DEFAULTS` is also served as `Query.pageLimits`), coded errors and preflight.
+- `server/core/`: config getters (`DATA_DIR`, `DATABASE_URL`, `DB_CONNECT_TIMEOUT_MS`, `PORT`, `TRUST_PROXY`,
+  `WEATHER_API_URL`), the `defaults.ts` groups (`PAGE_LIMIT_DEFAULTS` is also served as `Query.pageLimits`), coded
+  errors and preflight.
 - `server/db/`:
   - `client.ts`: opens PGlite or Postgres, each with its own migrator and close.
   - `schema.ts`: the tables. Migrations are generated into `drizzle/` and committed.
@@ -33,15 +35,27 @@ npm run db:import-yaml -- --data-dir examples/data --replace   # sample pages (s
   - `page-edits.ts`: the rules for changing a page, as pure functions.
   - `db-page-store.ts`: the store.
   - `yaml-format.ts`: the 1.x YAML layout, for the import and the zip export.
+  - `widget.ts`, `widget-input.ts`, `widget-disk.ts`: the widget model, its API validation, and its YAML form. The
+    YAML form is also what `items.widget` holds.
   - `slug.ts`: slugs and ids.
 - `server/site/site-settings.ts`: the launcher's search engines, in `site_settings`.
+- `server/widgets/`: fetching widget data.
+  - `widget-service.ts`: the cache (per page, item and settings hash), shared in-flight fetches and stale-on-error.
+  - `api.ts`, `rss.ts`, `weather.ts`: the fetchers.
+  - `secrets.ts`: fills in `${env:HOMEPAGE_*}` / `${file:…}` and scrubs them back out of everything a fetch returns.
 - `server/graphql/`: the SDL (`type-defs.ts`), resolvers (`schema.ts`), operation limits and the logger.
   `write-schema.ts` prints `schema.graphql`.
 - `server/http/`: `createApp(deps)`, health and shutdown. `server/index.ts` only boots.
 - `web/src/components/`: vendored cubeui and shadcn code. Don't edit it; reinstall with
   `npx shadcn@latest add @cubeui/<item>`.
-- `web/src/pages/`, `web/src/sections/`, `web/src/search/`, `web/src/status/`, `web/src/frames/`, `web/src/export/`:
-  the app's features.
+- The app's features:
+  - `web/src/pages/`
+  - `web/src/sections/`
+  - `web/src/search/`
+  - `web/src/status/`
+  - `web/src/frames/`
+  - `web/src/export/`
+  - `web/src/widgets/`: the card, its per-type views, `useWidgetData` and the editor.
 - `tests/`: mirrors `server/`. `tests/db.ts` opens one in-memory PGlite per file with the real migrations.
 - `examples/data/`: sample pages in the 1.x YAML layout, for `db:import-yaml`.
 
@@ -51,7 +65,13 @@ npm run db:import-yaml -- --data-dir examples/data --replace   # sample pages (s
 - **Every write is one transaction behind one advisory lock** (`exclusive` in `db-page-store.ts`), and rewrites the
   page's sections and items whole. Page-changing rules belong in `page-edits.ts`, not in the store.
 - **Item URLs are http(s) only,** checked in `page-input.ts` and again when YAML is read. Frames load in this
-  origin's page.
-- **`items.widget` is reserved** for widget items (issue #2).
+  origin's page. Only a WIDGET may have no URL (`Item.url` is nullable for that); links and frames always have one.
+- **A widget's secrets never leave the fetch.**
+  - References are stored and served as written.
+  - Values are resolved in `server/widgets/secrets.ts` at fetch time, and every string a fetch returns (values, raw
+    JSON, errors) passes through its `redact`.
+  - A new fetcher must take its strings through the same resolver.
+  - `tests/widgets` and `tests/http/widgets.test.ts` hold this.
+- **Widgets fetch on view, never in the background.** No timers on the server.
 - **No sign-in.** Keep it on a trusted network (issue #1).
 - **No Storybook stories yet.** The UI was checked with scripted headless runs.

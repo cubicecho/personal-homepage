@@ -9,7 +9,7 @@
 import { STATUS_DEFAULTS, type StatusSettings } from '../core/defaults.ts';
 import { errorMessage } from '../core/errors.ts';
 import { HttpStatus, MS_PER_SECOND } from '../core/wire.ts';
-import { itemsOf, type Page } from '../pages/page.ts';
+import { checkUrlOf, itemsOf, type Page } from '../pages/page.ts';
 
 /** How an item's last check went. */
 export const StatusState = { Up: 'UP', Down: 'DOWN', Unknown: 'UNKNOWN' } as const;
@@ -289,10 +289,12 @@ export function createStatusChecker(
   return {
     forPage: async (page) => {
       prune();
-      const checked = itemsOf(page).filter((item) => item.check.enabled);
-      return Promise.all(
-        checked.map(async (item) => ({ itemId: item.id, ...(await statusOf(item.check.url ?? item.url)) })),
-      );
+      // An item is checked when checking is on and it has something to check: a widget may have neither URL.
+      const checked = itemsOf(page).flatMap((item) => {
+        const url = checkUrlOf(item);
+        return item.check.enabled && url !== null ? [{ itemId: item.id, url }] : [];
+      });
+      return Promise.all(checked.map(async ({ itemId, url }) => ({ itemId, ...(await statusOf(url)) })));
     },
   };
 }

@@ -101,6 +101,9 @@
         "rules": {
           "style": {
             "noMagicNumbers": "off"
+          },
+          "suspicious": {
+            "noTemplateCurlyInString": "off"
           }
         }
       }

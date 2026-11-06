@@ -96,9 +96,12 @@ export function checkFrameHeight(value: number | null, bounds?: { min: number; m
 /**
  * The host of a URL, for a tile's small print.
  *
- * @param url - An item's URL.
- * @returns Its host and port, or the URL itself when it does not parse.
+ * @param url - An item's URL, or null for a widget that has none.
+ * @returns Its host and port, the URL itself when it does not parse, or nothing when there is none.
  */
-export function hostOf(url: string): string {
+export function hostOf(url: string | null): string {
+  if (url === null) {
+    return '';
+  }
   return URL.canParse(url) ? new URL(url).host : url;
 }
