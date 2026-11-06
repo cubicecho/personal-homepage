@@ -11,6 +11,8 @@ interface ItemStatusDotProps {
   item: Item;
   /** Writes the state and the time it took beside the glyph, where there is room for it. */
   showLabel?: boolean;
+  /** Draws nothing while the item is up or not checked yet: only a problem is worth the space. */
+  onlyWhenDown?: boolean;
 }
 
 /** How each state is drawn: a glyph of its own shape and a word, so colour is never the only signal. */
@@ -55,9 +57,13 @@ function checkedLine(checkedAt: string | null): string | null {
  * with the details in a tooltip and in its accessible name. Nothing for an item that is not
  * checked, or before the first answer.
  */
-export function ItemStatusDot({ pageSlug, item, showLabel = false }: ItemStatusDotProps) {
+export function ItemStatusDot({ pageSlug, item, showLabel = false, onlyWhenDown = false }: ItemStatusDotProps) {
   const status = useItemStatus(pageSlug, item.id);
   if (item.checkEnabled === false || status === undefined) {
+    return null;
+  }
+  const isHidden = onlyWhenDown && status.state !== 'DOWN';
+  if (isHidden) {
     return null;
   }
   const { Glyph, label, ink } = STATES[status.state];

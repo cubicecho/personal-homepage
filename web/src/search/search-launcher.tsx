@@ -29,14 +29,14 @@ import { iconElement } from '@/core/page-icons';
 import { hostOf } from '@/pages/form-checks';
 import { ITEM_KINDS, OPENS_IN } from '@/pages/item-kinds';
 import { type Item, type Page, usePages } from '@/pages/use-pages';
-import { canStartShortcut, commandKeyLabel, isPaletteChord, isPrintableKey } from './hotkeys';
+import { canStartShortcut, chordLabel, commandKeyLabel, isPaletteChord, SEARCH_CHORD } from './hotkeys';
 import { type Engine, type MatchFields, parseQuery, rankMatches, scoreMatch, searchUrl } from './search-query';
 
 /** The most items the launcher lists at once. */
 const MAX_ITEM_RESULTS = 20;
 /** The most pages the launcher lists at once. */
 const MAX_PAGE_RESULTS = 8;
-/** How long the engines are trusted before they are asked for again: a hand edit to site.yaml shows within it. */
+/** How long the engines are trusted before they are asked for again: a change to them shows within it. */
 const ENGINES_STALE_MS = 60_000;
 
 /** What the launcher offers to open. */
@@ -54,12 +54,8 @@ interface PlacedItem {
 
 /** What the rest of the app can ask of the launcher. */
 interface SearchControls {
-  /**
-   * Opens the launcher.
-   *
-   * @param [initialText] - What to start the search with, such as the key that opened it.
-   */
-  openSearch: (initialText?: string) => void;
+  /** Opens the launcher, empty. */
+  openSearch: () => void;
 }
 
 const SearchContext = createContext<SearchControls | null>(null);
@@ -83,7 +79,7 @@ function useSearchControls(): SearchControls {
  *
  * @returns The query.
  */
-function useSearchEngines() {
+export function useSearchEngines() {
   return useQuery({
     queryKey: ['searchEngines'],
     queryFn: async () => (await request(SearchEnginesDocument)).searchEngines,
@@ -134,15 +130,15 @@ function openInNewTab(url: string): void {
  * Holds the launcher: the palette itself and the keys that open it, for the whole app.
  *
  * @remarks
- * Ctrl+K (⌘K on a Mac) and `/` open it, and so does starting to type anywhere outside a field.
- * None of them fire while a field has focus or a dialog or menu is open.
+ * Ctrl+K (⌘K on a Mac) opens and closes it, and so does the Search button. The chord does not open it
+ * while a field has focus or a dialog or menu is open. Every shortcut holds a modifier: no bare key opens it.
  */
 export function SearchProvider({ children }: { children: ReactNode }) {
   const [isOpen, setIsOpen] = useState(false);
   const [text, setText] = useState('');
 
-  const openSearch = useCallback((initialText = '') => {
-    setText(initialText);
+  const openSearch = useCallback(() => {
+    setText('');
     setIsOpen(true);
   }, []);
 
@@ -153,20 +149,15 @@ export function SearchProvider({ children }: { children: ReactNode }) {
      * @param event - A key press anywhere in the page.
      */
     const onKeyDown = (event: KeyboardEvent): void => {
-      if (isPaletteChord(event)) {
-        if (isOpen) {
-          event.preventDefault();
-          setIsOpen(false);
-        } else if (canStartShortcut(event)) {
-          event.preventDefault();
-          openSearch();
-        }
+      if (isPaletteChord(event) === false) {
         return;
       }
-      const mayOpen = isOpen === false && canStartShortcut(event) && isPrintableKey(event);
-      if (mayOpen) {
+      if (isOpen) {
         event.preventDefault();
-        openSearch(event.key === '/' ? '' : event.key);
+        setIsOpen(false);
+      } else if (canStartShortcut(event)) {
+        event.preventDefault();
+        openSearch();
       }
     };
     document.addEventListener('keydown', onKeyDown);
@@ -428,7 +419,7 @@ interface SearchButtonProps {
 /** Opens the launcher, so the keyboard is not the only way in. */
 export function SearchButton({ variant }: SearchButtonProps) {
   const { openSearch } = useSearchControls();
-  const shortcut = `${commandKeyLabel()} K`;
+  const shortcut = chordLabel(SEARCH_CHORD);
   if (variant === 'icon') {
     return (
       <Button
