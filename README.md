@@ -16,9 +16,13 @@ A self-hosted start page for your network. Every edit is made in the web app.
   default) or a widget (two columns by default) can take 1 column up to that setting, or the full width: **Width**
   in its dialog. An item set wider than the page has is drawn as wide as the page, and keeps its setting.
 - **Status dots** on items show whether each service answers, checked by the server.
-- **Search:** press Ctrl+K (or ⌘K), or `/`, or just start typing anywhere. It finds items and pages on every
-  page, opens addresses, and sends anything else to a web search. Start with `!g` or another prefix to pick the
-  search engine.
+- **Search:** press Ctrl+K (⌘K on a Mac), or the Search button. It finds items and pages on every page, opens
+  addresses, and sends anything else to a web search. Start with `!g` or another prefix to pick the search engine.
+- **Edit mode:** pages open in view mode, with no menus or Add buttons and frames showing only the service.
+  **Edit** in the page header (Ctrl+Shift+E, ⌘⇧E on a Mac) shows the editing controls; **Done** hides them again.
+  Each browser remembers it. Only people who can edit see the button.
+- **Keyboard shortcuts:** Ctrl+/ (⌘/ on a Mac), or **Keyboard shortcuts** in the sidebar, lists them all. Every
+  shortcut holds Ctrl or ⌘, and none fires while you're typing in a field or a dialog is open.
 
 Pages are kept in a database: a built-in one (PGlite, which is Postgres running inside the server) in `DATA_DIR`,
 or your own Postgres server. The web app reads and writes them through a GraphQL API.

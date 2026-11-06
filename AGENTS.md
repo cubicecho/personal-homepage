@@ -65,7 +65,10 @@ npm run db:generate            # after changing server/db/schema.ts; commit driz
 - The app's features:
   - `web/src/pages/`
   - `web/src/sections/`
-  - `web/src/search/`
+  - `web/src/search/`: the launcher (Ctrl/⌘+K), and `hotkeys.ts`, the one place every shortcut's chord and
+    "may a shortcut start here" check live.
+  - `web/src/shell/`: edit mode (`edit-mode.tsx`, its stored state in `edit-mode-state.ts`), the keyboard
+    shortcuts dialog (Ctrl/⌘+/), the sidebar fold (Ctrl/⌘+B) and the theme menu.
   - `web/src/status/`
   - `web/src/frames/`
   - `web/src/widgets/`: the card, its per-type views, `useWidgetData` and the editor.
@@ -76,6 +79,11 @@ npm run db:generate            # after changing server/db/schema.ts; commit driz
 - `tests/`: mirrors `server/`. `tests/db.ts` opens one in-memory PGlite per file with the real migrations.
 
 ## Rules specific to this repo
+
+- **Every keyboard shortcut holds Ctrl or ⌘.** No bare-key shortcuts. Define a new one as a `Chord` in
+  `web/src/search/hotkeys.ts`, gate it with `canStartShortcut`, and list it in the shortcuts dialog.
+- **Editing controls show only in edit mode.** A new ⋯, Add or move control reads `useIsEditing()`, not
+  `useCanEdit()`; `useCanEdit()` is for whether someone may switch edit mode on at all.
 
 - **Nothing above the store touches the database.** Resolvers and the web app use only `page.ts` types.
 - **Every write is one transaction behind one advisory lock** (`exclusive` in `db-page-store.ts`), and rewrites the
