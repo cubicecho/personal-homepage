@@ -5,11 +5,11 @@ import { iconElement } from '@/core/page-icons';
 import { ItemStatusDot } from '@/status/item-status-dot';
 import { hostOf } from './form-checks';
 import { OPENS_IN } from './item-kinds';
-import type { Item, Page } from './use-pages';
+import type { AddressedItem, Page } from './use-pages';
 
 interface ItemTileProps {
   page: Page;
-  item: Item;
+  item: AddressedItem;
   /** The item's ⋯ menu, drawn beside the tile's link and outside it. */
   menuSlot: ReactNode;
 }

@@ -8,7 +8,7 @@ import { ArrowLeft } from '@/components/ui/icons';
 import { AppWindow, ExternalLink } from '@/core/app-icons';
 import { FrameCheckNotice } from '@/frames/frame-check-notice';
 import { FRAME_SANDBOX } from './item-frame';
-import { findPage, type Page, usePages } from './use-pages';
+import { findAddressedItem, findPage, type Page, usePages } from './use-pages';
 
 interface AppViewProps {
   /** The page the app is on. */
@@ -54,7 +54,7 @@ export function AppView({ slug, itemId }: AppViewProps) {
   }
 
   const page = findPage(query.data, slug);
-  const item = page?.items.find((candidate) => candidate.id === itemId);
+  const item = findAddressedItem(page, itemId);
   if (page === undefined || item === undefined) {
     return (
       <PageLayout

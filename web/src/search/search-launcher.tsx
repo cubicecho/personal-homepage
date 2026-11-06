@@ -237,6 +237,11 @@ function SearchDialog({ open, onOpenChange, text, onTextChange }: SearchDialogPr
       return;
     }
     const { page, item } = target;
+    if (item.url === null) {
+      // A widget with no address of its own: its page is where it is.
+      void navigate(page.isHome ? { to: '/' } : { to: '/pages/$slug', params: { slug: page.slug } });
+      return;
+    }
     if (newTab || item.opensIn === 'NEW_TAB') {
       openInNewTab(item.url);
     } else if (item.opensIn === 'SAME_TAB') {

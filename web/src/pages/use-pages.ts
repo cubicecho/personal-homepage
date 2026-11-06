@@ -249,6 +249,30 @@ export function findPage(pages: readonly Page[], slug: string): Page | undefined
   return pages.find((page) => page.slug === slug);
 }
 
+/** An item with an address: every link and frame, and a widget whose title links somewhere. */
+export type AddressedItem = Item & { url: string };
+
+/**
+ * Checks whether an item has an address to open or frame.
+ *
+ * @param item - The item.
+ * @returns True when it has one; only a widget may not.
+ */
+export function hasAddress(item: Item): item is AddressedItem {
+  return item.url !== null;
+}
+
+/**
+ * Finds an item on a page that can be opened or framed.
+ *
+ * @param page - The page, or undefined when there is none.
+ * @param itemId - The item's id.
+ * @returns The item, or undefined when the page has no such item or it has no address.
+ */
+export function findAddressedItem(page: Page | undefined, itemId: string): AddressedItem | undefined {
+  return page?.items.filter(hasAddress).find((candidate) => candidate.id === itemId);
+}
+
 /**
  * Names a section for a picker or a question, including one with no heading.
  *

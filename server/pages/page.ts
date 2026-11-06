@@ -1,5 +1,6 @@
 // The page model and the store contract. Everything above the store (GraphQL, the web app) reads
 // these types only, so the YAML store can be swapped for a database without touching them.
+import type { Widget } from './widget.ts';
 
 /** The slug of the page that is always there, first in the list, and cannot be deleted. */
 export const HOME_SLUG = 'home';
@@ -10,6 +11,8 @@ export const ItemKind = {
   Link: 'LINK',
   /** The URL framed inline on the page, at a set height. */
   Frame: 'FRAME',
+  /** Data the server fetches and the page shows: values from an API, a feed, the weather. */
+  Widget: 'WIDGET',
 } as const;
 export type ItemKind = (typeof ItemKind)[keyof typeof ItemKind];
 
@@ -72,21 +75,26 @@ export interface StatusCheck {
   url: string | null;
 }
 
-/** One thing on a page: a link tile or an inline frame. */
+/** One thing on a page: a link tile, an inline frame, or a widget. */
 export interface Item {
   /** Unique within its page, across its sections; made from the title when the item is added. */
   id: string;
   kind: ItemKind;
   title: string;
-  /** An absolute http or https URL. */
-  url: string;
-  /** Where a LINK opens. Null for a FRAME. */
+  /**
+   * An absolute http or https URL. A widget's is optional: where its title links to, such as the service
+   * whose numbers it shows. Null only for a widget.
+   */
+  url: string | null;
+  /** Where a LINK opens. Null for the other kinds. */
   opensIn: OpensIn | null;
   icon: IconRef | null;
   description: string | null;
   /** Height of the inline frame, in CSS pixels. Set for FRAME items only, null for the others. */
   frameHeightPx: number | null;
   check: StatusCheck;
+  /** What a WIDGET shows. Null for the other kinds. */
+  widget: Widget | null;
 }
 
 /** A group of items on a page, with an optional heading. */
@@ -131,17 +139,29 @@ export interface SectionFields {
 
 /**
  * What an item is made from, or replaced with. Already validated: `frameHeightPx` is null unless the
- * kind is FRAME, and `opensIn` is null unless it is LINK.
+ * kind is FRAME, `opensIn` is null unless it is LINK, `widget` is null unless it is WIDGET, and `url` is
+ * only null for a WIDGET.
  */
 export interface ItemFields {
   kind: ItemKind;
   title: string;
-  url: string;
+  url: string | null;
   opensIn: OpensIn | null;
   icon: IconRef | null;
   description: string | null;
   frameHeightPx: number | null;
   check: StatusCheck;
+  widget: Widget | null;
+}
+
+/**
+ * Gives the URL an item's status check asks.
+ *
+ * @param item - The item.
+ * @returns The check URL when one is set, else the item's own; null when it has neither.
+ */
+export function checkUrlOf(item: Pick<Item, 'url' | 'check'>): string | null {
+  return item.check.url ?? item.url;
 }
 
 /**

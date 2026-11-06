@@ -21,6 +21,10 @@
 //       title: Grafana
 //       url: http://nas.local:3001/d/home
 //       frameHeightPx: 480
+//     - id: queue
+//       kind: widget            # url is optional for a widget: where its title links to
+//       title: Sonarr queue
+//       widget: { type: rss, url: https://example.com/feed.xml }   # the mapping is in widget-disk.ts
 //
 // With more sections, or a titled one, the items sit under `sections`:
 //
@@ -53,9 +57,11 @@ import { parse, stringify } from 'yaml';
 import { z } from 'zod';
 import { PAGE_LIMIT_DEFAULTS } from '../core/defaults.ts';
 import { badInput, errorMessage, notFound } from '../core/errors.ts';
+import { diskWord, toDiskWord } from './disk-words.ts';
 import { HOME_SLUG, type Item, ItemKind, itemsOf, OpensIn, type Page, type PageStore, type Section } from './page.ts';
 import { describeIssues, isIconRef, isWebUrl, normalizeIconRef, SLUG_PATTERN } from './page-input.ts';
 import { slugFrom, uniqueSlug } from './slug.ts';
+import { diskWidgetSchema, widgetFromDisk, widgetToDisk } from './widget-disk.ts';
 
 const { maxPages, maxItemsPerPage, maxSectionsPerPage, minFrameHeightPx, maxFrameHeightPx, defaultFrameHeightPx } =
   PAGE_LIMIT_DEFAULTS;
@@ -88,31 +94,6 @@ export interface YamlPageStoreSettings {
   dataDir: string;
 }
 
-/**
- * A vocabulary member as written on disk: any case, hyphens for underscores.
- *
- * @typeParam T - The vocabulary's values.
- * @param values - The vocabulary's values, in upper case.
- * @returns A schema reading `film` or `FILM` as `FILM`.
- */
-function diskWord<T extends string>(values: readonly T[]) {
-  const isMember = (value: string): value is T => values.some((member) => member === value);
-  return z
-    .string()
-    .transform((value) => value.trim().toUpperCase().replaceAll('-', '_'))
-    .refine(isMember, { message: `must be one of ${values.map(toDiskWord).join(', ')}` });
-}
-
-/**
- * Writes a vocabulary member the way a person would type it in the file.
- *
- * @param value - The member, in upper case.
- * @returns It in lower case, hyphens for underscores.
- */
-function toDiskWord(value: string): string {
-  return value.toLowerCase().replaceAll('_', '-');
-}
-
 const ITEM_KINDS = [...Object.values(ItemKind), LEGACY_APP_KIND];
 const OPENS_IN = Object.values(OpensIn);
 
@@ -125,19 +106,36 @@ const diskIcon = z
     return isIconRef(icon, true) ? icon : null;
   });
 
-const diskItemSchema = z.object({
-  id: z.string().trim().nullish(),
-  kind: diskWord(ITEM_KINDS).nullish(),
-  opensIn: diskWord(OPENS_IN).nullish(),
-  title: z.string().trim().min(1, 'needs a title'),
-  url: z.string().trim().refine(isWebUrl, 'must be an http:// or https:// address'),
-  icon: diskIcon,
-  description: z.string().trim().nullish(),
-  frameHeightPx: z.number().int().positive().nullish(),
-  check: z
-    .union([z.boolean(), z.string().trim().refine(isWebUrl, 'check must be true, false or an http(s) address')])
-    .nullish(),
-});
+const diskItemSchema = z
+  .object({
+    id: z.string().trim().nullish(),
+    kind: diskWord(ITEM_KINDS).nullish(),
+    opensIn: diskWord(OPENS_IN).nullish(),
+    title: z.string().trim().min(1, 'needs a title'),
+    url: z.string().trim().refine(isWebUrl, 'must be an http:// or https:// address').nullish(),
+    icon: diskIcon,
+    description: z.string().trim().nullish(),
+    frameHeightPx: z.number().int().positive().nullish(),
+    check: z
+      .union([z.boolean(), z.string().trim().refine(isWebUrl, 'check must be true, false or an http(s) address')])
+      .nullish(),
+    widget: diskWidgetSchema.nullish(),
+  })
+  .superRefine((item, context) => {
+    const isWidget = item.kind === ItemKind.Widget;
+    const hasUrl = (item.url ?? null) !== null;
+    if (isWidget === false && hasUrl === false) {
+      context.addIssue({ code: 'custom', path: ['url'], message: 'is missing' });
+    }
+    const widget = item.widget ?? null;
+    if (isWidget && widget === null) {
+      context.addIssue({ code: 'custom', path: ['widget'], message: 'is missing' });
+    }
+    const problem = isWidget && widget !== null ? widgetFromDisk(widget) : null;
+    if (typeof problem === 'string') {
+      context.addIssue({ code: 'custom', path: ['widget'], message: problem });
+    }
+  });
 type DiskItem = z.output<typeof diskItemSchema>;
 
 const diskSectionSchema = z.object({
@@ -200,23 +198,34 @@ function claimId(written: string | null | undefined, title: string, fallback: st
  */
 function itemFromDisk(item: DiskItem, id: string): Item {
   const isLegacyApp = item.kind === LEGACY_APP_KIND;
-  const kind = item.kind === ItemKind.Frame ? ItemKind.Frame : ItemKind.Link;
-  const isFrame = kind === ItemKind.Frame;
+  const isWidget = item.kind === ItemKind.Widget;
+  const isFrame = item.kind === ItemKind.Frame;
+  let kind: ItemKind = ItemKind.Link;
+  if (isWidget) {
+    kind = ItemKind.Widget;
+  } else if (isFrame) {
+    kind = ItemKind.Frame;
+  }
   const writtenOpensIn = item.opensIn ?? OpensIn.NewTab;
   const opensIn = isLegacyApp ? OpensIn.App : writtenOpensIn;
   const description = item.description ?? '';
-  const check = item.check ?? true;
+  // A widget is only checked when asked: its link is often a page whose status nobody needs.
+  const check = item.check ?? isWidget === false;
   const isCheckUrl = typeof check === 'string';
+  const diskWidget = item.widget ?? null;
+  const widget = isWidget && diskWidget !== null ? widgetFromDisk(diskWidget) : null;
   return {
     id,
     kind,
     title: item.title,
-    url: item.url,
-    opensIn: isFrame ? null : opensIn,
+    url: item.url ?? null,
+    opensIn: kind === ItemKind.Link ? opensIn : null,
     icon: item.icon,
     description: description === '' ? null : description,
     frameHeightPx: isFrame ? frameHeightFrom(item.frameHeightPx) : null,
     check: { enabled: check !== false, url: isCheckUrl ? check : null },
+    // diskItemSchema has already refused a widget that would come back as a sentence.
+    widget: typeof widget === 'string' ? null : widget,
   };
 }
 
@@ -258,7 +267,9 @@ function itemToDisk(item: Item): Record<string, unknown> {
     written.opensIn = toDiskWord(item.opensIn);
   }
   written.title = item.title;
-  written.url = item.url;
+  if (item.url !== null) {
+    written.url = item.url;
+  }
   if (item.icon !== null) {
     written.icon = item.icon;
   }
@@ -268,10 +279,14 @@ function itemToDisk(item: Item): Record<string, unknown> {
   if (item.frameHeightPx !== null) {
     written.frameHeightPx = item.frameHeightPx;
   }
-  if (item.check.enabled === false) {
-    written.check = false;
-  } else if (item.check.url !== null) {
+  const isCheckedByDefault = item.kind !== ItemKind.Widget;
+  if (item.check.url !== null && item.check.enabled) {
     written.check = item.check.url;
+  } else if (item.check.enabled !== isCheckedByDefault) {
+    written.check = item.check.enabled;
+  }
+  if (item.widget !== null) {
+    written.widget = widgetToDisk(item.widget);
   }
   return written;
 }

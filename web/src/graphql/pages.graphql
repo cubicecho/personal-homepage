@@ -10,6 +10,37 @@ fragment ItemFields on Item {
   frameHeightPx
   checkEnabled
   checkUrl
+  widget {
+    type
+    cacheSeconds
+    refreshSeconds
+    api {
+      url
+      method
+      headers {
+        name
+        value
+      }
+      body
+      fields {
+        label
+        path
+        format
+        warnAbove
+        warnBelow
+      }
+    }
+    rss {
+      url
+      limit
+      showSummary
+    }
+    weather {
+      latitude
+      longitude
+      units
+    }
+  }
 }
 
 fragment SectionFields on Section {
@@ -53,6 +84,13 @@ query PageLimits {
     minFrameHeightPx
     maxFrameHeightPx
     defaultFrameHeightPx
+    maxWidgetFields
+    maxWidgetHeaders
+    maxRssEntries
+    minWidgetCacheSeconds
+    maxWidgetCacheSeconds
+    minWidgetRefreshSeconds
+    maxWidgetBodyLength
   }
 }
 

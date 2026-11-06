@@ -5,10 +5,12 @@ A self-hosted start page for your network. Every edit is made in the web app.
 - **Pages** are listed in the sidebar. **Home** is always there and always first; add as many others as you like.
 - **Sections** group a page's items under a heading. A section can start folded, and each browser remembers
   whether you opened it.
-- **Items** come in two kinds:
+- **Items** come in three kinds:
   - **Links** are tiles. Each opens in a new tab, in this tab, or inside the homepage: framed across the page, with
     **Open in the browser** beside it.
   - **Frames** show a service inline on the page, at a height you set.
+  - **Widgets** show data the server fetches: values picked out of a JSON API, a feed's latest entries, or the
+    weather. See [Widgets](#widgets).
 - **Status dots** on items show whether each service answers, checked by the server.
 - **Search:** press Ctrl+K (or ⌘K), or `/`, or just start typing anywhere. It finds items and pages on every
   page, opens addresses, and sends anything else to a web search. Start with `!g` or another prefix to pick the
@@ -119,6 +121,56 @@ search:
     - { prefix: g, name: Google, url: "https://www.google.com/search?q={query}" }
 ```
 
+## Widgets
+
+A widget is an item the server fills in. Pick **Widget** as the kind in the item dialog, then one of three types.
+**Test** runs it before you save; for an API widget it also shows the raw JSON, to write paths against.
+
+- **API values:** one to six values picked out of a JSON API's answer, each with a label, a JSONPath
+  (`$.totalRecords`, `$.records[0].title`, `$.records.length`), a format (number, size in bytes, percentage,
+  duration, date or text) and optional warning thresholds. One value is drawn as a large figure.
+- **Feed:** the latest entries of an RSS or Atom feed, each linking to the entry, optionally with a line of its summary.
+- **Weather:** the weather now, today's high and low and the coming hours, from [Open-Meteo](https://open-meteo.com/).
+  It needs no key. `WEATHER_API_URL` points it at a self-hosted Open-Meteo instead.
+
+How they fetch:
+
+- **Only when a page is viewed.** Nothing polls in the background. The server keeps each answer for the widget's
+  cache time (60 seconds for an API, 15 minutes for a feed or the weather, unless you set one), and a page can ask
+  again every so often while it is open and its tab is showing.
+- **From the server, not the browser.** Sources on your LAN work, there are no cross-origin problems, and API keys
+  never reach the page.
+- **A source that is down doesn't blank the widget.** The last good answer stays, marked out of date, with the error
+  under it.
+
+### Secrets
+
+An API widget's address, headers and body may hold secret references, which the server fills in only when it
+fetches. The page file and the API keep the reference, never the value:
+
+```yaml
+- id: sonarr-queue
+  kind: widget
+  title: Sonarr queue
+  url: http://sonarr.lan:8989 # optional: where the title links to
+  widget:
+    type: api
+    url: http://sonarr.lan:8989/api/v3/queue
+    headers: { X-Api-Key: "${env:HOMEPAGE_SONARR_KEY}" }
+    fields:
+      - { label: Downloading, path: $.totalRecords, format: number, warnAbove: 10 }
+```
+
+- `${env:NAME}` reads an environment variable. **Its name must start with `HOMEPAGE_`**, so a widget can't read any
+  other variable the server has.
+- `${file:/path}` reads a file, trimmed, such as a Docker secret. **It must be in `/run/secrets` or
+  `<DATA_DIR>/secrets`.**
+- These limits matter because there is no sign-in yet: anyone who can edit a widget chooses where its requests go.
+- Anything a fetch sends back is scrubbed of the secrets it used: the widget's values, the raw JSON of a test, and
+  every error message.
+
+With Docker Compose, pass the variables in `environment:` or an `env_file:`.
+
 ## Frames and apps
 
 Apps and frames show the service in an `<iframe>`. The service talks to its own server and keeps its own sign-in;
@@ -146,7 +198,7 @@ GraphQL at `/graphql`. In development, GraphiQL is served there too. `schema.gra
 (it is generated, not committed).
 
 - **Queries:** `pages`, `page(slug)`, `pageLimits`, `itemStatuses(pageSlug)`, `frameCheck(url)`,
-  `iconSearch(query)` and `searchEngines`.
+  `iconSearch(query)`, `searchEngines`, `widgetData(pageSlug, itemId)` and `widgetPreview(input)`.
 - **Page mutations:** `createPage`, `updatePage`, `deletePage`, `movePage`.
 - **Section mutations:** `addSection`, `updateSection`, `removeSection`, `moveSection`.
 - **Item mutations:** `addItem`, `updateItem`, `removeItem`, `moveItem`. `moveItem` can move an item into another
