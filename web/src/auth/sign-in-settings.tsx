@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import type { SsoSetupFieldsFragment } from '@/__generated__/graphql';
 import { InputField, useAppForm } from '@/components/app-form';
 import { CardLayout } from '@/components/card-layout';
 import { ConfirmButton } from '@/components/confirm-button';
@@ -8,6 +9,7 @@ import { Alert } from '@/components/ui/alert';
 import { FormElement } from '@/components/ui/form-element';
 import { useToast } from '@/components/ui/toast';
 import { messageOf } from '@/lib/error-message';
+import { CallbackNotice } from './callback-notice';
 import { useAccess, useAuthConfig, usePairSso, useSsoSetup, useUnpairSso } from './use-access';
 
 /** Where a provider can come from, in words. */
@@ -29,6 +31,25 @@ function providerHint(source: keyof typeof SOURCE_LABELS, issuer: string | null)
     return undefined;
   }
   return issuer === null ? SOURCE_LABELS[source] : `${SOURCE_LABELS[source]}: ${issuer}`;
+}
+
+/**
+ * Says where the callback address comes from, under it.
+ *
+ * @param setup - How sign-in is set up.
+ * @returns The line.
+ */
+function callbackHint(setup: SsoSetupFieldsFragment): string {
+  if (setup.source === 'ENV') {
+    return 'Register this as the redirect URI with the provider.';
+  }
+  if (setup.appUrlSource === 'ENV') {
+    return 'Under APP_URL, set on the server.';
+  }
+  if (setup.appUrlSource === 'PAIRED') {
+    return 'Under the address the homepage was open at when it was paired.';
+  }
+  return 'Pairing registers it under the address you have the homepage open at, unless APP_URL is set.';
 }
 
 /** What a setup URL looks like, for the field's hint. */
@@ -130,12 +151,11 @@ export function SignInSettings() {
                   label="Without signing in"
                   value={config.data.publicView ? 'People can see the pages (PUBLIC_VIEW)' : 'Nothing can be seen'}
                 />
-                {source === 'ENV' ? (
-                  <PropertyRow label="Redirect URI" value={redirectUri} hint="Register this with the provider." />
-                ) : null}
+                <PropertyRow label="Callback address" value={redirectUri} hint={callbackHint(setup.data)} />
               </>
             }
           />
+          <CallbackNotice setup={setup.data} />
           {source === 'NONE' && canPair ? <PairForm /> : null}
           {source !== 'ENV' && canPair === false ? (
             <p className="text-foreground/70 text-sm">Only the admin can change how people sign in.</p>

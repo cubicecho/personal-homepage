@@ -19,6 +19,16 @@ const UNPAIR = 'mutation { unpairSso { source } }';
 const CONFIG = '{ authConfig { mode sso { name } } }';
 const TOKEN = 'iat-good';
 const RAT = 'rat-1';
+const ROTATED_RAT = 'rat-2';
+/** Where people open the homepage in these tests: a LAN address, not this machine. */
+const LAN_APP = 'http://homepage.lan:3000';
+const LAN_CALLBACK = `${LAN_APP}/api/auth/callback/oidc`;
+const PAIR_AT = `mutation ($url: String!, $appUrl: String) {
+  pairSso(setupUrl: $url, appUrl: $appUrl) { source redirectUri appUrl appUrlSource callbackIsLocal }
+}`;
+const REPOINT = `mutation ($appUrl: String) {
+  updateSsoAppUrl(appUrl: $appUrl) { providerUpdated message setup { redirectUri appUrlSource callbackIsLocal } }
+}`;
 
 interface FakeDcr {
   issuer: string;
@@ -30,6 +40,10 @@ interface FakeDcr {
   registrations: { body: Record<string, unknown>; authorization: string | undefined }[];
   /** Auth headers the client was deleted with. */
   deletions: (string | undefined)[];
+  /** Bodies and auth headers the client was updated with (RFC 7592). */
+  updates: { body: Record<string, unknown>; authorization: string | undefined }[];
+  /** What an update answers. 200 rotates the registration access token, as heautou does. */
+  updateStatus: number;
   close(): Promise<void>;
 }
 
@@ -49,6 +63,8 @@ async function startDcr(): Promise<FakeDcr> {
     canRegister: true,
     registrations: [],
     deletions: [],
+    updates: [],
+    updateStatus: 200,
     close: () =>
       new Promise((resolve) => {
         server.closeAllConnections();
@@ -81,6 +97,14 @@ async function startDcr(): Promise<FakeDcr> {
   app.delete('/oidc/reg/homepage-client', (req, res) => {
     fake.deletions.push(req.headers.authorization);
     res.status(204).end();
+  });
+  app.put('/oidc/reg/homepage-client', express.json(), (req, res) => {
+    fake.updates.push({ body: req.body, authorization: req.headers.authorization });
+    if (fake.updateStatus !== 200) {
+      res.status(fake.updateStatus).json({ error: 'invalid_redirect_uri', error_description: 'not allowed here' });
+      return;
+    }
+    res.json({ ...req.body, registration_access_token: ROTATED_RAT });
   });
   return fake;
 }
@@ -198,6 +222,96 @@ describe('pairing', () => {
     expect(asAdmin.data.unpairSso).toEqual({ source: 'NONE' });
     expect(dcr.deletions).toEqual([`Bearer ${RAT}`]);
     expect((await app.gql(CONFIG)).data.authConfig).toEqual({ mode: 'OPEN', sso: null });
+  });
+
+  it('registers the callback under the address the browser has the homepage open at, and keeps it', async () => {
+    const paired = await app.gql(PAIR_AT, { url: setupUrl(), appUrl: `${LAN_APP}/` });
+    expect(paired.data.pairSso).toEqual({
+      source: 'PAIRED',
+      redirectUri: LAN_CALLBACK,
+      appUrl: LAN_APP,
+      appUrlSource: 'PAIRED',
+      callbackIsLocal: false,
+    });
+    expect(dcr.registrations[0]?.body.redirect_uris).toEqual([LAN_CALLBACK]);
+    expect((await readPairedOidc(database.db))?.appUrl).toBe(LAN_APP);
+    const config = await app.gql('{ authConfig { sso { signInUrl } } }');
+    expect(config.data.authConfig.sso.signInUrl).toBe(`${LAN_APP}/sso/oidc`);
+  });
+
+  it('falls back to the Origin header when the app sends no address', async () => {
+    await app.gql(PAIR, { url: setupUrl() }, { origin: LAN_APP });
+    expect(dcr.registrations[0]?.body.redirect_uris).toEqual([LAN_CALLBACK]);
+  });
+
+  it('lets APP_URL win over the browser address', async () => {
+    vi.stubEnv('APP_URL', 'https://home.example.com');
+    const paired = await app.gql(PAIR_AT, { url: setupUrl(), appUrl: LAN_APP });
+    expect(paired.data.pairSso).toMatchObject({
+      redirectUri: 'https://home.example.com/api/auth/callback/oidc',
+      appUrlSource: 'ENV',
+    });
+  });
+
+  it('refuses an address that is not a bare origin', async () => {
+    const answer = await app.gql(PAIR_AT, { url: setupUrl(), appUrl: `${LAN_APP}/home?x=1` });
+    expect(answer.errors?.[0]?.extensions?.code).toBe(ErrorCode.BadUserInput);
+    expect(dcr.registrations).toEqual([]);
+  });
+
+  it('refuses a localhost callback when the browser is on another machine, and says to set APP_URL', async () => {
+    await app.close();
+    vi.stubEnv('TRUST_PROXY', '1');
+    app = await startApp(database.db);
+    const fromLan = { 'x-forwarded-for': '192.168.1.20' };
+    const answer = await app.gql(PAIR, { url: setupUrl() }, fromLan);
+    expect(answer.errors?.[0]?.extensions).toMatchObject({
+      code: ErrorCode.BadUserInput,
+      reason: PairingFailure.BadAppUrl,
+    });
+    expect(answer.errors?.[0]?.message).toMatch(/APP_URL/);
+    expect(dcr.registrations).toEqual([]);
+
+    const fine = await app.gql(PAIR_AT, { url: setupUrl(), appUrl: LAN_APP }, fromLan);
+    expect(fine.errors).toBeUndefined();
+  });
+
+  it('moves a localhost callback to the browser address and tells the provider (RFC 7592)', async () => {
+    const paired = await app.gql(PAIR_AT, { url: setupUrl() });
+    expect(paired.data.pairSso).toMatchObject({ appUrlSource: 'FALLBACK', callbackIsLocal: true });
+
+    const moved = await app.gql(REPOINT, { appUrl: LAN_APP });
+    expect(moved.data.updateSsoAppUrl).toEqual({
+      providerUpdated: true,
+      message: null,
+      setup: { redirectUri: LAN_CALLBACK, appUrlSource: 'PAIRED', callbackIsLocal: false },
+    });
+    expect(dcr.updates[0]).toEqual({
+      authorization: `Bearer ${RAT}`,
+      body: expect.objectContaining({
+        client_id: 'homepage-client',
+        client_secret: 'homepage-secret',
+        redirect_uris: [LAN_CALLBACK],
+      }),
+    });
+    expect(await readPairedOidc(database.db)).toMatchObject({
+      appUrl: LAN_APP,
+      registrationAccessToken: ROTATED_RAT,
+    });
+  });
+
+  it('records the new address anyway when the provider refuses, and says what to change there', async () => {
+    await app.gql(PAIR_AT, { url: setupUrl() });
+    dcr.updateStatus = 400;
+    const moved = await app.gql(REPOINT, { appUrl: LAN_APP });
+    expect(moved.data.updateSsoAppUrl).toMatchObject({ providerUpdated: false, setup: { redirectUri: LAN_CALLBACK } });
+    expect(moved.data.updateSsoAppUrl.message).toContain(LAN_CALLBACK);
+    expect(await readPairedOidc(database.db)).toMatchObject({ appUrl: LAN_APP, registrationAccessToken: RAT });
+  });
+
+  it('has nothing to move before pairing', async () => {
+    const answer = await app.gql(REPOINT, { appUrl: LAN_APP });
+    expect(answer.errors?.[0]?.extensions?.code).toBe(ErrorCode.BadUserInput);
   });
 
   it('leaves a provider set in the environment alone', async () => {

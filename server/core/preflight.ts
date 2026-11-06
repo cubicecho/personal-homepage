@@ -3,6 +3,7 @@
 import { accessSync, constants, mkdirSync } from 'node:fs';
 import { parseTrustedProxies } from '../auth/forward-auth.ts';
 import {
+  configuredAppUrl,
   configuredAuthSecret,
   databaseUrl,
   databaseUrlProblem,
@@ -50,6 +51,11 @@ function signInConfigProblem(): string | null {
   const isIssuerUrl = issuer === '' || URL.canParse(issuer);
   if (isIssuerUrl === false) {
     return `OIDC_ISSUER "${issuer}" is not a URL. It is the provider's issuer, such as https://id.example.com/oidc.`;
+  }
+  // A provider set in the environment is never paired from a browser, so nothing records the address.
+  const isEnvProvider = issuer !== '' && clientId !== '';
+  if (isProduction() && isEnvProvider && configuredAppUrl() === null) {
+    return 'OIDC_ISSUER is set but APP_URL is not, so sign-ins would come back to localhost. Set APP_URL to the address you open the homepage at, such as http://homepage.lan:3000.';
   }
   const clientAuth = (process.env.OIDC_CLIENT_AUTH ?? '').trim();
   const isKnownAuth = clientAuth === '' || OIDC_CLIENT_AUTH_METHODS.some((method) => method === clientAuth);

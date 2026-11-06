@@ -1,8 +1,8 @@
-import { oidcRedirectUri } from '../core/config.ts';
+import type { SiteUrls } from '../core/config.ts';
 import { AUTH_DEFAULTS } from '../core/defaults.ts';
 import { HttpStatus } from '../core/wire.ts';
 import type { Database } from '../db/client.ts';
-import { clearPairedOidc, type PairedOidc, readPairedOidc, savePairedOidc } from './settings.ts';
+import { clearPairedOidc, type PairedOidc, readPairedOidc, savePairedOidc, updatePairedOidc } from './settings.ts';
 
 // Pairing with an OIDC provider by pasting one URL, instead of copying a client id and secret into the
 // environment. The provider (heautou, or any other that does OAuth 2.0 Dynamic Client Registration)
@@ -29,6 +29,8 @@ export const PairingFailure = {
   Refused: 'REFUSED',
   /** The provider is turning requests away for now. */
   RateLimited: 'RATE_LIMITED',
+  /** The callback would be a localhost address that the browser pairing could never come back to. */
+  BadAppUrl: 'BAD_APP_URL',
 } as const;
 /** One of the values in `PairingFailure`. */
 export type PairingFailure = (typeof PairingFailure)[keyof typeof PairingFailure];
@@ -167,16 +169,26 @@ async function discover(issuer: string): Promise<string> {
 /**
  * Says what the homepage asks to be registered as.
  *
+ * @param redirectUri - Where the provider sends the browser back to.
+ * @param [authMethod] - How the client proves itself at the token endpoint.
  * @returns The client metadata (RFC 7591).
  */
-function clientMetadata() {
+function clientMetadata(redirectUri: string, authMethod: PairedOidc['clientAuth'] = 'client_secret_basic') {
   return {
     client_name: CLIENT_NAME,
-    redirect_uris: [oidcRedirectUri()],
-    token_endpoint_auth_method: 'client_secret_basic',
+    redirect_uris: [redirectUri],
+    token_endpoint_auth_method: authMethod,
     grant_types: ['authorization_code'],
     response_types: ['code'],
   };
+}
+
+/** Where the homepage is reached, as pairing records it. */
+export interface PairingAddress {
+  /** The addresses sign-in will use: the callback registered is `urls.redirectUri`. */
+  urls: SiteUrls;
+  /** What to keep as the address people open the homepage at, or null to keep none (APP_URL decides). */
+  recordedAppUrl: string | null;
 }
 
 /**
@@ -217,10 +229,11 @@ async function refusal(response: Response): Promise<PairingError> {
  *
  * @param db - The database.
  * @param setupUrl - What was pasted.
+ * @param address - The callback to register, and the address to record.
  * @returns The pairing as saved. The caller rebuilds the auth instance (auth/auth-host.ts) to use it.
  * @throws A `PairingError` saying why, when nothing was paired.
  */
-export async function pair(db: Database, setupUrl: string): Promise<PairedOidc> {
+export async function pair(db: Database, setupUrl: string, address: PairingAddress): Promise<PairedOidc> {
   const setup = parseSetupUrl(setupUrl);
   const endpoint = await discover(setup.issuer);
   const response = await call(endpoint, {
@@ -230,7 +243,7 @@ export async function pair(db: Database, setupUrl: string): Promise<PairedOidc> 
       'content-type': 'application/json',
       accept: 'application/json',
     },
-    body: JSON.stringify(clientMetadata()),
+    body: JSON.stringify(clientMetadata(address.urls.redirectUri)),
   });
   if (response.ok === false) {
     throw await refusal(response);
@@ -252,9 +265,78 @@ export async function pair(db: Database, setupUrl: string): Promise<PairedOidc> 
     name: setup.name,
     registrationAccessToken: text(body.registration_access_token),
     registrationClientUri: text(body.registration_client_uri),
+    appUrl: address.recordedAppUrl,
   };
   await savePairedOidc(db, paired);
   return paired;
+}
+
+/** What re-pointing the paired client did. */
+export interface RepointResult {
+  /** Whether the provider now has the new callback registered. */
+  providerUpdated: boolean;
+  /** Why it does not, as a sentence that says what to do instead; null when it does. */
+  message: string | null;
+}
+
+/**
+ * Moves the paired client to a new address: records it, and asks the provider to register the new
+ * callback in place of the old one (RFC 7592 client update).
+ *
+ * @param db - The database. There must be a pairing.
+ * @param address - The new callback, and the address to record.
+ * @returns Whether the provider took the change. The new address is recorded either way, so the
+ * homepage's side is right and the provider's admin can fix theirs by hand.
+ */
+export async function repoint(db: Database, address: PairingAddress): Promise<RepointResult> {
+  const paired = await readPairedOidc(db);
+  if (paired === null) {
+    return { providerUpdated: false, message: 'The homepage is not paired with a provider.' };
+  }
+  const handEdit = `Change the client's redirect URI to ${address.urls.redirectUri} in your provider instead.`;
+  const { registrationClientUri, registrationAccessToken } = paired;
+  if (registrationClientUri === null || registrationAccessToken === null) {
+    await updatePairedOidc(db, { appUrl: address.recordedAppUrl });
+    return { providerUpdated: false, message: `The provider gave no way to update the client. ${handEdit}` };
+  }
+  // RFC 7592 replaces the whole registration, so every field is sent again, with the client's own id
+  // (and secret, which some providers check).
+  const metadata = {
+    ...clientMetadata(address.urls.redirectUri, paired.clientAuth),
+    client_id: paired.clientId,
+    ...(paired.clientSecret === null ? {} : { client_secret: paired.clientSecret }),
+  };
+  let response: Response;
+  try {
+    response = await fetch(registrationClientUri, {
+      method: 'PUT',
+      headers: {
+        authorization: `Bearer ${registrationAccessToken}`,
+        'content-type': 'application/json',
+        accept: 'application/json',
+      },
+      body: JSON.stringify(metadata),
+      signal: AbortSignal.timeout(AUTH_DEFAULTS.oidcPairingTimeoutMs),
+    });
+  } catch {
+    await updatePairedOidc(db, { appUrl: address.recordedAppUrl });
+    return { providerUpdated: false, message: `Could not reach the provider. ${handEdit}` };
+  }
+  if (response.ok === false) {
+    const body = await json(response);
+    const reason = text(body.error_description) ?? text(body.error) ?? `it answered ${response.status}`;
+    console.warn(`[auth] OIDC provider refused to update the client: ${reason}`);
+    await updatePairedOidc(db, { appUrl: address.recordedAppUrl });
+    return { providerUpdated: false, message: `The provider refused the change (${reason}). ${handEdit}` };
+  }
+  // Providers may rotate the registration access token on every update (heautou does).
+  const body = await json(response);
+  const rotated = text(body.registration_access_token);
+  await updatePairedOidc(db, {
+    appUrl: address.recordedAppUrl,
+    ...(rotated === null ? {} : { registrationAccessToken: rotated }),
+  });
+  return { providerUpdated: true, message: null };
 }
 
 /**

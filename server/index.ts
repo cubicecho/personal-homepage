@@ -4,11 +4,12 @@ import { sql } from 'drizzle-orm';
 import { type AuthHost, createAuthHost } from './auth/auth-host.ts';
 import { resolveAuthSecret } from './auth/secret.ts';
 import {
+  AppUrlSource,
   databaseUrl,
   dataDir,
   dbConnectTimeoutMs,
   forwardAuthTrustedProxies,
-  oidcRedirectUri,
+  isLoopbackHost,
   port,
   version,
 } from './core/config.ts';
@@ -30,9 +31,18 @@ const LISTEN_HOST = '0.0.0.0';
  */
 function logSignIn(authHost: AuthHost): void {
   const oidc = authHost.oidc();
+  const urls = authHost.urls();
   const proxies = forwardAuthTrustedProxies();
+  const from = { [AppUrlSource.Env]: 'APP_URL', [AppUrlSource.Paired]: 'pairing', [AppUrlSource.Fallback]: 'default' };
+  console.log(`[auth] callback address ${urls.redirectUri} (from ${from[urls.source]})`);
   if (oidc !== null) {
-    console.log(`[auth] sign-in with ${oidc.name} (${oidc.issuer}); redirect URI ${oidcRedirectUri()}`);
+    console.log(`[auth] sign-in with ${oidc.name} (${oidc.issuer})`);
+    const isLocal = isLoopbackHost(new URL(urls.redirectUri).hostname);
+    if (isLocal) {
+      console.warn(
+        '[auth] the callback is a localhost address, so only a browser on this machine can finish signing in. Set APP_URL to the address you open the homepage at, or use "Fix the callback address" on the sign-in page.',
+      );
+    }
   }
   if (proxies.length > 0) {
     console.log(`[auth] forward auth: Remote-* headers believed from ${proxies.join(', ')}`);

@@ -1,7 +1,7 @@
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { bearer, genericOAuth, oneTimeToken } from 'better-auth/plugins';
-import { appUrl, authSecret, OIDC_PROVIDER_ID, type OidcConfig, oidcConfig, serverUrl } from '../core/config.ts';
+import { authSecret, OIDC_PROVIDER_ID, type OidcConfig, oidcConfig, type SiteUrls, siteUrls } from '../core/config.ts';
 import { AUTH_DEFAULTS } from '../core/defaults.ts';
 import { SECONDS_PER_DAY } from '../core/wire.ts';
 import type { Database } from '../db/client.ts';
@@ -22,6 +22,8 @@ export interface AuthOptions {
   secret?: string;
   /** The OIDC provider to sign in with, or null for none. The default is `oidcConfig()`, the environment's. */
   oidc?: OidcConfig | null;
+  /** Where people open the homepage and where the callback is. The default is the environment's alone. */
+  urls?: SiteUrls;
 }
 
 /**
@@ -31,7 +33,10 @@ export interface AuthOptions {
  * @param [options] - Test overrides.
  * @returns The auth instance.
  */
-export function createAuth(db: Database, { secret = authSecret(), oidc = oidcConfig() }: AuthOptions = {}) {
+export function createAuth(
+  db: Database,
+  { secret = authSecret(), oidc = oidcConfig(), urls = siteUrls(null) }: AuthOptions = {},
+) {
   return betterAuth({
     database: drizzleAdapter(db, {
       provider: 'pg',
@@ -39,9 +44,9 @@ export function createAuth(db: Database, { secret = authSecret(), oidc = oidcCon
     }),
     secret,
     // The OIDC callback is served here (http/sso.ts).
-    baseURL: serverUrl(),
+    baseURL: urls.serverUrl,
     // So a sign-in may finish on the app's pages when they are another origin.
-    trustedOrigins: [new URL(appUrl()).origin],
+    trustedOrigins: [new URL(urls.appUrl).origin],
     advanced: { database: { generateId: 'uuid' } },
     session: { expiresIn: AUTH_DEFAULTS.sessionTtlDays * SECONDS_PER_DAY },
     // Every account is made through the adapter, so this is the one place the first becomes the admin.
@@ -51,7 +56,7 @@ export function createAuth(db: Database, { secret = authSecret(), oidc = oidcCon
     // forward auth made first.
     ...(oidc ? { account: { accountLinking: { requireLocalEmailVerified: false } } } : {}),
     // Where an OIDC callback goes when it cannot tell where the sign-in came from: the sign-in page.
-    onAPIError: { errorURL: `${appUrl()}/login` },
+    onAPIError: { errorURL: `${urls.appUrl}/login` },
     plugins: [
       // Mutations return the raw token, and the client sends it back as `Authorization: Bearer`.
       bearer(),
