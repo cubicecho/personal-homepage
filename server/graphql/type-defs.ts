@@ -209,7 +209,26 @@ export const TYPE_DEFS = /* GraphQL */ `
     checkUrl: String
   }
 
+  "A web search for the launcher."
+  input SearchEngineInput {
+    "Lower-case letters and digits: what follows ! in the launcher."
+    prefix: String!
+    name: String!
+    "The search address, with {query} where the query goes."
+    url: String!
+  }
+
+  "The launcher's web searches. A field left out uses the built-in default."
+  input SearchSettingsInput {
+    "At least one, with different prefixes."
+    engines: [SearchEngineInput!]
+    "The prefix of the engine a query with no prefix goes to."
+    defaultPrefix: String
+  }
+
   type Mutation {
+    "Replaces the launcher's web searches and returns them. Null goes back to the built-in ones."
+    setSearchEngines(input: SearchSettingsInput): [SearchEngine!]!
     "Adds a page at the end of the list."
     createPage(input: CreatePageInput!): Page!
     "Changes a page's title or icon."

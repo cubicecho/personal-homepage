@@ -4,11 +4,13 @@ import path from 'node:path';
 import express from 'express';
 import { ICON_DEFAULTS } from '../../server/core/defaults.ts';
 import { HttpStatus } from '../../server/core/wire.ts';
+import type { OpenedDatabase } from '../../server/db/client.ts';
 import { createFaviconFetcher, iconLinks, sniffImageType } from '../../server/icons/favicons.ts';
 import { MS_PER_HOUR, MS_PER_MINUTE } from '../../server/icons/fetching.ts';
 import { FAVICON_CACHE_DIR, faviconPath, mountIcons } from '../../server/icons/http.ts';
+import { createDbPageStore } from '../../server/pages/db-page-store.ts';
 import { HOME_SLUG } from '../../server/pages/page.ts';
-import { createYamlPageStore } from '../../server/pages/yaml-page-store.ts';
+import { openTestDatabase } from '../db.ts';
 import { linkFields, makeDataDir, portOf } from '../helpers.ts';
 import { ICO_BYTES, PNG_BYTES, SVG_TEXT, startSite, type TestSite } from './site.ts';
 
@@ -170,6 +172,7 @@ describe('favicon fetcher', () => {
 });
 
 describe('GET /icons/favicon', () => {
+  let database: OpenedDatabase;
   let site: TestSite;
   let server: Server;
   let base: string;
@@ -180,8 +183,12 @@ describe('GET /icons/favicon', () => {
     site.routes.set('/', { type: HTML, body: '<link rel="icon" type="image/svg+xml" href="/logo.svg">' });
     site.routes.set('/logo.svg', { type: 'image/svg+xml', body: SVG_TEXT });
     const data = await makeDataDir();
-    remove = data.remove;
-    const pages = await createYamlPageStore({ dataDir: data.dir });
+    database = await openTestDatabase();
+    remove = async () => {
+      await database.close();
+      await data.remove();
+    };
+    const pages = await createDbPageStore(database.db);
     await pages.addItem(HOME_SLUG, null, linkFields('NAS', { url: `${site.base}/`, icon: 'favicon' }));
     await pages.addItem(HOME_SLUG, null, linkFields('Gone', { url: 'http://127.0.0.1:9/' }));
     const app = express();

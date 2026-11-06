@@ -212,6 +212,16 @@ const resolvers = {
   },
   Mutation: {
     /**
+     * Resolves `Mutation.setSearchEngines`.
+     *
+     * @param _parent - Unused.
+     * @param args - The new settings, or null for the defaults.
+     * @param ctx - Request context.
+     * @returns The engines now in use.
+     */
+    setSearchEngines: (_parent: unknown, args: { input?: unknown }, ctx: Context): Promise<SearchEngine[]> =>
+      ctx.site.setSearch(args.input ?? null),
+    /**
      * Resolves `Mutation.createPage`.
      *
      * @param _parent - Unused.

@@ -2,7 +2,7 @@ import { createServer, type Server } from 'node:http';
 import { ErrorCode } from '../../server/core/errors.ts';
 import { createFrameChecker, type FrameChecker } from '../../server/frames/frame-check.ts';
 import { createApp } from '../../server/http/app.ts';
-import { createYamlPageStore } from '../../server/pages/yaml-page-store.ts';
+import { databaseDeps, openTestDatabase } from '../db.ts';
 import { makeDataDir, portOf } from '../helpers.ts';
 
 /** How long the cache keeps an answer in these tests, in seconds. */
@@ -115,8 +115,9 @@ describe('frame check', () => {
 
   it('is served as Query.frameCheck, refusing anything but http(s)', async () => {
     const data = await makeDataDir();
-    const pages = await createYamlPageStore({ dataDir: data.dir });
-    const app = createApp({ pages, dataDir: data.dir, frames: checker() }).listen(0);
+    const database = await openTestDatabase();
+    const deps = await databaseDeps(database.db);
+    const app = createApp({ ...deps, dataDir: data.dir, frames: checker() }).listen(0);
     await new Promise<void>((resolve) => app.once('listening', resolve));
     const post = async (url: string) => {
       const response = await fetch(`http://127.0.0.1:${portOf(app)}/graphql`, {
@@ -136,6 +137,7 @@ describe('frame check', () => {
     } finally {
       app.closeAllConnections();
       await new Promise<void>((resolve) => app.close(() => resolve()));
+      await database.close();
       await data.remove();
     }
   });

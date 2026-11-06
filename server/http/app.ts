@@ -12,7 +12,6 @@ import { useOperationLimits } from '../graphql/operation-limits.ts';
 import { schema } from '../graphql/schema.ts';
 import { mountIcons } from '../icons/http.ts';
 import { createIconService } from '../icons/icon-service.ts';
-import { createSiteSettings } from '../site/site-settings.ts';
 import { createStatusChecker } from '../status/status-checker.ts';
 import { healthHandler } from './health.ts';
 
@@ -23,10 +22,15 @@ const WEB_ROUTES = /^(?!\/(graphql|healthz|export\.zip)$)(?!\/icons\/).*/;
 /** Where `npm run build` puts the web app. */
 export const WEB_DIST = fileURLToPath(new URL('../../dist', import.meta.url));
 
-/** What the app is built from. Every service but the page store is made here when left out. */
-export interface AppDeps extends Pick<Services, 'pages'>, Partial<Omit<Services, 'pages'>> {
-  /** The data directory: what the export zips, and where icon caches live. */
+/**
+ * What the app is built from. The services kept in the database are given; the rest are made here
+ * when left out.
+ */
+export interface AppDeps extends Pick<Services, 'pages' | 'site'>, Partial<Omit<Services, 'pages' | 'site'>> {
+  /** The data directory, where the icon caches live. */
   dataDir: string;
+  /** Runs a trivial query, rejecting when the database doesn't answer. `/healthz` reports it. */
+  checkDatabase: () => Promise<unknown>;
   /** The built web app's directory. Left out in tests. */
   dist?: string;
 }
@@ -34,16 +38,16 @@ export interface AppDeps extends Pick<Services, 'pages'>, Partial<Omit<Services,
 /**
  * Builds the Express app: GraphQL, health, export, icons, and the built web app when there is one. It does not listen.
  *
- * @param deps - The page store, the other services when a test replaces them, and where things are.
+ * @param deps - The stores, the other services when a test replaces them, and where things are.
  * @returns The app.
  */
-export function createApp({ dataDir, dist, ...deps }: AppDeps): Express {
+export function createApp({ dataDir, dist, checkDatabase, ...deps }: AppDeps): Express {
   const services: Services = {
     pages: deps.pages,
+    site: deps.site,
     status: deps.status ?? createStatusChecker(),
     frames: deps.frames ?? createFrameChecker(),
     icons: deps.icons ?? createIconService({ dataDir }),
-    site: deps.site ?? createSiteSettings({ dataDir }),
   };
   const yoga = createYoga<Record<string, never>, Context>({
     schema,
@@ -57,10 +61,10 @@ export function createApp({ dataDir, dist, ...deps }: AppDeps): Express {
   const app = express();
   app.disable('x-powered-by');
   app.set('trust proxy', trustProxy());
-  app.get(HEALTH_ENDPOINT, healthHandler());
+  app.get(HEALTH_ENDPOINT, healthHandler(checkDatabase));
   app.use(GRAPHQL_ENDPOINT, express.json({ limit: HTTP_DEFAULTS.bodyLimit }));
   app.all(GRAPHQL_ENDPOINT, (req, res) => yoga(req, res));
-  mountExport(app, dataDir);
+  mountExport(app, services);
   mountIcons(app, services.pages, dataDir);
 
   const hasWebBuild = dist !== undefined && existsSync(dist);

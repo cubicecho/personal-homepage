@@ -1,29 +1,19 @@
-// Site-wide settings that are not pages, read from `<dataDir>/site.yaml` beside the page order:
+// Site-wide settings that are not pages, kept in the one row of `site_settings`. So far that is the
+// launcher's web searches, stored as written:
 //
-//   search:
-//     defaultPrefix: g
-//     engines:
-//       - prefix: g
-//         name: Google
-//         url: https://www.google.com/search?q={query}
-//       - prefix: s
-//         name: SearXNG
-//         url: http://searx.local/search?q={query}
+//   { "defaultPrefix": "s", "engines": [{ "prefix": "s", "name": "SearXNG", "url": "http://searx.local/search?q={query}" }] }
 //
-// Both keys are optional. Without `engines`, SEARCH_DEFAULTS' engines are used; without
-// `defaultPrefix`, the default's prefix when it is one of the engines, otherwise the first engine.
-// The file is read on every call, so a hand edit shows up without a restart. A `search` key that
-// doesn't fit the shape is logged once (`[site]`) and ignored, and the defaults are used.
-import { readFile } from 'node:fs/promises';
-import path from 'node:path';
-import { parse } from 'yaml';
+// Both keys are optional. Without `engines`, SEARCH_DEFAULTS' engines are used; without `defaultPrefix`,
+// the default's prefix when it is one of the engines, otherwise the first engine. A stored value that no
+// longer fits (it came from an import, or a rule changed) is logged once (`[site]`) and the defaults used.
+import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { SEARCH_DEFAULTS, type SearchEngineSettings } from '../core/defaults.ts';
-import { errorMessage } from '../core/errors.ts';
+import { badInput } from '../core/errors.ts';
+import type { Database } from '../db/client.ts';
+import { SITE_SETTINGS_ID, siteSettings } from '../db/schema.ts';
 import { describeIssues, isWebUrl } from '../pages/page-input.ts';
 
-const SITE_FILE = 'site.yaml';
-const MISSING_FILE = 'ENOENT';
 /** Where the query goes in an engine's URL. */
 export const QUERY_PLACEHOLDER = '{query}';
 /** Lower-case letters and digits: what follows `!` in the launcher. */
@@ -51,12 +41,20 @@ export interface SiteSettings {
    * @returns The engines, in order; exactly one is the default.
    */
   searchEngines(): Promise<SearchEngine[]>;
-}
-
-/** Where the settings are read from. */
-export interface SiteSettingsOptions {
-  /** The directory holding `site.yaml`. */
-  dataDir: string;
+  /**
+   * Gives the search settings as stored, for the export.
+   *
+   * @returns `{ engines, defaultPrefix }` as written, or null when the defaults are in use.
+   */
+  storedSearch(): Promise<unknown>;
+  /**
+   * Replaces the search settings.
+   *
+   * @param search - `{ engines, defaultPrefix }`, either optional; null to go back to the defaults.
+   * @returns The engines now in use.
+   * @throws BAD_USER_INPUT when the settings don't fit the rules above.
+   */
+  setSearch(search: unknown): Promise<SearchEngine[]>;
 }
 
 const engineSchema = z.object({
@@ -87,8 +85,6 @@ const searchSchema = z
   })
   .nullish();
 
-const siteSchema = z.looseObject({ search: z.unknown().optional() });
-
 /**
  * Picks the default engine and marks it.
  *
@@ -107,82 +103,78 @@ function markDefault(engines: readonly SearchEngineSettings[], wanted: string | 
   return engines.map((engine) => ({ ...engine, isDefault: engine.prefix === chosen }));
 }
 
-/** The engines when site.yaml says nothing usable. */
+/** The engines when nothing usable is stored. */
 const DEFAULT_ENGINES = markDefault(SEARCH_DEFAULTS.engines, SEARCH_DEFAULTS.defaultPrefix) ?? [];
 
 /**
- * Builds the site settings reader.
+ * Checks search settings and works out the engines they give.
  *
- * @param options - Where `site.yaml` is.
- * @returns The reader.
+ * @param raw - The settings, as stored or as sent.
+ * @returns The engines, or what is wrong with the settings.
  */
-export function createSiteSettings(options: SiteSettingsOptions): SiteSettings {
-  const siteFile = path.join(options.dataDir, SITE_FILE);
+export function resolveSearch(raw: unknown): { engines: SearchEngine[] } | { problem: string } {
+  const result = searchSchema.safeParse(raw);
+  if (result.success === false) {
+    return { problem: describeIssues(result.error) };
+  }
+  const search = result.data ?? {};
+  const marked = markDefault(search.engines ?? SEARCH_DEFAULTS.engines, search.defaultPrefix ?? null);
+  if (marked === null) {
+    return { problem: `defaultPrefix "${search.defaultPrefix}" is not one of the engines' prefixes` };
+  }
+  return { engines: marked };
+}
+
+/**
+ * Builds the settings over the database.
+ *
+ * @param db - The database, migrated.
+ * @returns The settings.
+ */
+export function createSiteSettings(db: Database): SiteSettings {
   /** The last problem logged, so each is logged once until it changes. */
   let reported: string | null = null;
 
   /**
-   * Logs a problem the first time it is seen, and forgets it once the file reads.
+   * Reads the stored search settings.
    *
-   * @param problem - What is wrong, or null when nothing is.
+   * @returns What is stored, or null when nothing is.
    */
-  const report = (problem: string | null): void => {
-    if (problem !== null && problem !== reported) {
-      console.warn(`[site] ignoring search in ${SITE_FILE}, using the default engines: ${problem}`);
-    }
-    reported = problem;
-  };
-
-  /**
-   * Reads the `search` key of site.yaml.
-   *
-   * @returns Its raw value, undefined when the file is missing; or what is wrong with the file.
-   */
-  const readSearch = async (): Promise<{ raw: unknown; problem: string | null }> => {
-    let text: string;
-    try {
-      text = await readFile(siteFile, 'utf-8');
-    } catch (error) {
-      const isMissing = error instanceof Error && 'code' in error && error.code === MISSING_FILE;
-      if (isMissing) {
-        return { raw: undefined, problem: null };
-      }
-      throw error;
-    }
-    let parsed: unknown;
-    try {
-      parsed = parse(text);
-    } catch (error) {
-      return { raw: undefined, problem: `not valid YAML: ${errorMessage(error).split('\n')[0]}` };
-    }
-    const site = siteSchema.safeParse(parsed ?? {});
-    if (site.success === false) {
-      return { raw: undefined, problem: 'the file is not a mapping of keys' };
-    }
-    return { raw: site.data.search, problem: null };
+  const readSearch = async (): Promise<unknown> => {
+    const [row] = await db
+      .select({ search: siteSettings.search })
+      .from(siteSettings)
+      .where(eq(siteSettings.id, SITE_SETTINGS_ID));
+    return row?.search ?? null;
   };
 
   return {
     searchEngines: async () => {
-      const { raw, problem } = await readSearch();
-      if (problem !== null) {
-        report(problem);
+      const resolved = resolveSearch(await readSearch());
+      if ('problem' in resolved) {
+        if (resolved.problem !== reported) {
+          console.warn(`[site] ignoring the stored search settings, using the default engines: ${resolved.problem}`);
+        }
+        reported = resolved.problem;
         return DEFAULT_ENGINES;
       }
-      const result = searchSchema.safeParse(raw);
-      if (result.success === false) {
-        report(describeIssues(result.error));
-        return DEFAULT_ENGINES;
+      reported = null;
+      return resolved.engines;
+    },
+
+    storedSearch: readSearch,
+
+    setSearch: async (search) => {
+      const resolved = resolveSearch(search);
+      if ('problem' in resolved) {
+        throw badInput(resolved.problem);
       }
-      const search = result.data ?? {};
-      const engines = search.engines ?? SEARCH_DEFAULTS.engines;
-      const marked = markDefault(engines, search.defaultPrefix ?? null);
-      if (marked === null) {
-        report(`defaultPrefix "${search.defaultPrefix}" is not one of the engines' prefixes`);
-        return DEFAULT_ENGINES;
-      }
-      report(null);
-      return marked;
+      const stored = search ?? null;
+      await db
+        .insert(siteSettings)
+        .values({ id: SITE_SETTINGS_ID, search: stored })
+        .onConflictDoUpdate({ target: siteSettings.id, set: { search: stored } });
+      return resolved.engines;
     },
   };
 }
