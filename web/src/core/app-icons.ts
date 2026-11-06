@@ -6,6 +6,7 @@ export {
   ArrowRightLeft,
   ArrowUp,
   Ban,
+  Bookmark,
   Cloud,
   CloudDrizzle,
   CloudFog,

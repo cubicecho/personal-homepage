@@ -10,6 +10,7 @@ import {
 } from '@tanstack/react-router';
 import { House, LogOut } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { rememberReturnTo } from '@/auth/return-to';
 import { ACCESS_KEY, useAccess, useCanEdit, useSignOut } from '@/auth/use-access';
 import { CenteredLayout } from '@/components/centered-layout';
 import { EmptyState } from '@/components/empty-state';
@@ -168,6 +169,7 @@ function RootRoute() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (state) => state.location.pathname });
+  const searchStr = useRouterState({ select: (state) => state.location.searchStr });
   const access = useAccess();
   const isBare = BARE_PATHS.includes(pathname);
   const mustSignIn = access.data?.canView === false;
@@ -177,9 +179,11 @@ function RootRoute() {
   }, [queryClient]);
   useEffect(() => {
     if (mustSignIn && isBare === false) {
+      // Signing in leaves for the provider; this brings the browser back here (a bookmarklet's /add?…) after.
+      rememberReturnTo(`${pathname}${searchStr}`);
       void navigate({ to: '/login', replace: true });
     }
-  }, [mustSignIn, isBare, navigate]);
+  }, [mustSignIn, isBare, navigate, pathname, searchStr]);
 
   if (isBare) {
     return <Outlet />;

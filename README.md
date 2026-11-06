@@ -240,6 +240,19 @@ extra_hosts:
 
 Using the IP address in `DOCKHAND_URL` works too, but only fixes Dockhand.
 
+## Bookmarklet
+
+**Settings → Bookmarklet** has an **Add to homepage** button to drag to your browser's bookmarks bar. Click
+that bookmark on any site, and the homepage opens at `/add` with the site's address, title and description
+filled in. **Fill in** then adds its icon. Pick a page and section, and save.
+
+- The bookmarklet opens `APP_URL`, or the address recorded when sign-in was paired, or else the address you
+  had Settings open at. Settings warns when that is `localhost`, which only works on the same machine.
+- On a phone, copy the code from the same page and paste it as a bookmark's address.
+- Signing in on the way keeps the `/add?…` address, so you land on the filled-in dialog afterwards.
+- `/add` accepts only `http` and `https` addresses. A few sites with strict security settings stop
+  bookmarklets from running; use **Add item** there.
+
 ## The API
 
 GraphQL at `/graphql`. In development, GraphiQL is served there too. `schema.graphql` is printed by `npm run codegen`
