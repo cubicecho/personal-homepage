@@ -14,82 +14,73 @@ A self-hosted start page for your network. Every edit is made in the web app.
   page, opens addresses, and sends anything else to a web search. Start with `!g` or another prefix to pick the
   search engine.
 
-There is no database. Pages are YAML files in a data directory, and the web app reads and writes them through a
-GraphQL API. The API is the only thing that touches the files, so a database can replace them later without the
-web app changing (see [Storage](#storage)).
+Pages are kept in a database: a built-in one (PGlite, which is Postgres running inside the server) in `DATA_DIR`,
+or your own Postgres server. The web app reads and writes them through a GraphQL API.
 
 ## Quick start
 
 ```sh
 npm install
-cp -r examples/data ./data     # optional: start from the sample pages
 npm run dev                    # web on http://localhost:3000, API on :8787 (GraphiQL at /graphql)
 ```
 
-With no `./data`, the server makes one and creates an empty Home page.
+The first start makes `./data/pg`, the built-in database, with an empty Home page. To start from the sample
+pages instead, stop the server and run `npm run db:import-yaml -- --data-dir examples/data --replace`.
 
 ```sh
 npm run check && npm test      # lint, types, tests
 npm run build && npm start     # one process on PORT (default 3000) serving dist/
-docker compose up -d --build   # the same, in a container, with the pages in a named volume
+docker compose up -d --build   # the same, in a container, with the database in a named volume
 ```
 
-`.env.example` documents `DATA_DIR`, `PORT` and `TRUST_PROXY`.
+`.env.example` documents `DATA_DIR`, `DATABASE_URL`, `DB_CONNECT_TIMEOUT_MS`, `PORT` and `TRUST_PROXY`.
 
 Released images are published to GHCR as `ghcr.io/cubicecho/personal-homepage`, tagged with the version and
 `latest`. A `feat:` or `fix:` commit on `main` cuts a release once CI passes.
 
-## The data directory
+## Where pages are kept
 
-```
-data/
-  site.yaml           # pageOrder: [media, tools]  (page order after Home)
-  pages/
-    home.yaml
-    media.yaml        # the file name is the page's slug: /pages/media
-```
+| `DATABASE_URL`                          | Pages live in                        | Good for                               |
+| --------------------------------------- | ------------------------------------ | -------------------------------------- |
+| unset (the default)                     | `DATA_DIR/pg`, the built-in database | one server, nothing else to run        |
+| `postgres://user:password@host:5432/db` | that Postgres server                 | a Postgres you already run and back up |
 
-A page with one untitled section lists its items directly:
+- **Migrations run on every start.** They are committed in `drizzle/` and apply themselves, on either database.
+- **With Postgres, the server waits for it.** It retries for up to `DB_CONNECT_TIMEOUT_MS` (default 60 s), so it can
+  start before Postgres has. A wrong password or a missing database fails at once.
+- **The built-in database belongs to one server.** A second server pointed at the same `DATA_DIR` refuses to start
+  (`DATA_DIR/pg/homepage.pid` says who holds it). A lock left by a server that was killed is taken over.
+- `DATA_DIR` also holds the icon caches (`cache/`), which can be deleted at any time.
 
-```yaml
-title: Media
-icon: film
-items:
-  - id: jellyfin
-    title: Jellyfin
-    url: http://nas.local:8096
-    icon: di:jellyfin
-    description: Films and shows
-  - id: kanban
-    opensIn: app # new-tab (the default) | same-tab | app
-    title: Kanban
-    url: http://tools.local:3000
-    check: http://tools.local:3000/health # false to not check, or another address to check
-  - id: grafana
-    kind: frame # link (the default) | frame
-    title: Grafana
-    url: http://nas.local:3001/d/home?kiosk
-    frameHeightPx: 480 # frames only
-```
+### Backups
 
-With more sections, the items sit under each one:
+- **Download as zip,** at the bottom of the sidebar (`GET /export.zip`), saves every page and the search settings
+  as readable YAML: `site.yaml` and one `pages/<slug>.yaml` per page.
+  - To restore one, unzip it and run `npm run db:import-yaml -- --data-dir <the unzipped folder> --replace`, with
+    the server stopped when it uses the built-in database.
+  - A zip is a copy of the pages as they are now; there is no versioning.
+- **The built-in database:** copy `DATA_DIR/pg` while the server is stopped.
+- **Postgres:** `pg_dump`, as for any database.
 
-```yaml
-title: Media
-sections:
-  - id: watch
-    title: Watch
-    collapsed: true # starts folded
-    items: [...]
-  - id: listen
-    title: Listen
-    items: [...]
-```
+### Upgrading from 1.x
 
-- **You can edit files by hand.** They are read on every request, so changes show without a restart.
-  - Words such as `kind`, `opensIn` and glyph names are accepted in any case.
-  - An item or section with no `id` gets one made from its title.
-  - Files from 0.x with `kind: app` still read, as links that open in the app.
+Releases before 2.0 kept pages as YAML files in `DATA_DIR`. On its first start, 2.0 moves them into the database
+by itself:
+
+1. It imports `DATA_DIR/pages/*.yaml` and the page order and search settings in `DATA_DIR/site.yaml`, in one go.
+   This happens only when the database holds nothing but an empty Home page.
+2. It renames `pages/` and `site.yaml` to `pages.imported-<time>/` and `site.imported-<time>.yaml`, so they are
+   never imported twice.
+3. It logs `[db] imported N pages from YAML`. A file it can't read is logged and left out; the rest still import.
+
+To import YAML into a database that already has pages, use
+`npm run db:import-yaml -- --data-dir <folder> --replace`. It deletes the pages that are there first.
+
+Every 1.x format reads: `kind: app` items become links that open in the app, and a page with bare `items:` becomes
+one untitled section.
+
+## Items
+
 - **Icons** can be:
   - a built-in glyph: `globe`, `server`, `house`, `film`, `music` and the rest
   - an icon from [dashboard-icons](https://github.com/homarr-labs/dashboard-icons) (`di:jellyfin`) or
@@ -100,24 +91,35 @@ sections:
   - A success, a redirect, or a 401 or 403 (a sign-in page) counts as up.
   - An untrusted HTTPS certificate counts as up too, and says so.
   - Results are kept for 30 seconds.
-- **A save from the web app rewrites the whole page file.** Comments you typed into it are lost.
-- **A broken file does not take the site down.** A file that isn't valid YAML or doesn't fit the shape is logged
-  (`[store] skipping pages/x.yaml: …`) and left out of the list. Opening that page shows the error in a sentence.
+  - An item can turn its check off, or check another address, such as a health endpoint.
 - **Only `http` and `https` URLs are accepted.** A `javascript:` or `data:` URL in a frame would run inside this
   site.
 
 ## Search engines
 
-The launcher's web searches are DuckDuckGo (`!d`, the default), Google (`!g`) and Wikipedia (`!w`). To change them,
-add a `search` key to `site.yaml`, for example to put a SearXNG instance first:
+The launcher's web searches are DuckDuckGo (`!d`, the default), Google (`!g`) and Wikipedia (`!w`). There is no
+settings page for them yet. To change them, call `setSearchEngines` from GraphiQL at `/graphql` (in development),
+for example to put a SearXNG instance first:
 
-```yaml
-search:
-  defaultPrefix: s
-  engines:
-    - { prefix: s, name: SearXNG, url: "http://searx.local/search?q={query}" }
-    - { prefix: g, name: Google, url: "https://www.google.com/search?q={query}" }
+```graphql
+mutation {
+  setSearchEngines(
+    input: {
+      defaultPrefix: "s"
+      engines: [
+        { prefix: "s", name: "SearXNG", url: "http://searx.local/search?q={query}" }
+        { prefix: "g", name: "Google", url: "https://www.google.com/search?q={query}" }
+      ]
+    }
+  ) {
+    prefix
+    isDefault
+  }
+}
 ```
+
+`setSearchEngines(input: null)` goes back to the built-in engines. A `search:` key in an imported `site.yaml` sets
+them too.
 
 ## Frames and apps
 
@@ -133,13 +135,6 @@ nothing is proxied.
 - **Use addresses that work from every device you'll open the homepage on.** `http://localhost:8096` means a
   different machine on your phone.
 
-## Export
-
-**Download as zip**, at the bottom of the sidebar, saves `site.yaml` and every `pages/*.yaml` as one zip
-(`GET /export.zip`, named `homepage-YYYY-MM-DD.zip`). The files keep their paths, so unzipping it into an empty data
-directory restores every page. Nothing else in the data directory is included. There is no versioning: a zip is a
-copy of the files as they are now.
-
 ## The API
 
 GraphQL at `/graphql`. In development, GraphiQL is served there too. `schema.graphql` is printed by `npm run codegen`
@@ -151,23 +146,30 @@ GraphQL at `/graphql`. In development, GraphiQL is served there too. `schema.gra
 - **Section mutations:** `addSection`, `updateSection`, `removeSection`, `moveSection`.
 - **Item mutations:** `addItem`, `updateItem`, `removeItem`, `moveItem`. `moveItem` can move an item into another
   section.
+- **Settings:** `setSearchEngines`.
 
 Failures carry `extensions.code`: `BAD_USER_INPUT`, `NOT_FOUND` or `QUERY_TOO_COMPLEX`. `GET /healthz` answers
-`{ ok, version }`.
+`{ ok, version }`, or 503 when the database doesn't answer.
 
-## Storage
+## How storage is built
 
 `server/pages/page.ts` defines the `Page` and `Item` model and the `PageStore` interface. Everything above it
-(resolvers, the web app) uses only those. Input is validated by `server/pages/page-input.ts` before it reaches a
-store, so every store gets checked input.
+(resolvers, the web app) uses only those, and input is validated by `server/pages/page-input.ts` before it reaches
+the store.
 
-`server/pages/yaml-page-store.ts` is the only store so far. To move to a database, write another `PageStore` and
-pass it to `createApp` in `server/index.ts`. The store's own rules are written in the `PageStore` doc comments and
-covered by `tests/pages/yaml-page-store.test.ts`:
+- **The rules for changing a page** live in `server/pages/page-edits.ts` as pure functions:
+  - unique ids
+  - limits
+  - the last section stays
+  - moves clamp to the list
+- **`server/pages/db-page-store.ts`** applies those rules inside one transaction per change, behind one shared lock.
+  It writes a page's sections and items back whole, renumbered.
+- **`server/db/`** opens PGlite or Postgres (`client.ts`), defines the tables (`schema.ts`), waits for Postgres
+  (`wait.ts`) and imports YAML (`import-yaml.ts`).
+- **`server/pages/yaml-format.ts`** reads and writes the 1.x YAML layout, for the import and the zip.
 
-- unique slugs and ids
-- page and item limits
-- Home stays first and can't be deleted
+To change the tables, edit `server/db/schema.ts`, run `npm run db:generate`, and commit the new folder in
+`drizzle/`.
 
 ## Security
 

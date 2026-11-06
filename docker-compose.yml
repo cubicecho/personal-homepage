@@ -1,9 +1,9 @@
-# The homepage, with its page files in a named volume (.env is read from beside this file):
+# The homepage, with its built-in database in a named volume (.env is read from beside this file):
 #
 #   docker compose up -d --build
 #
-# To edit the YAML by hand instead, swap the volume for a bind mount such as ./data:/data.
-# The directory must be writable by uid 1000, the image's node user.
+# A bind mount (./data:/data) works too; the directory must be writable by uid 1000, the image's node user.
+# To keep pages in Postgres instead, uncomment the postgres service, DATABASE_URL and depends_on below.
 name: personal-homepage
 services:
   personal-homepage:
@@ -13,10 +13,26 @@ services:
     environment:
       TRUST_PROXY: ${TRUST_PROXY:-false}
       NODE_ENV: production
+      # DATABASE_URL: postgres://homepage:${POSTGRES_PASSWORD:-homepage}@postgres:5432/homepage
+    # depends_on:
+    #   postgres: { condition: service_healthy }
     volumes:
       - homepage_data:/data
     ports:
       - "${PORT:-3000}:3000"
 
+  # postgres:
+  #   image: postgres:17-alpine
+  #   restart: unless-stopped
+  #   environment: { POSTGRES_USER: homepage, POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-homepage}", POSTGRES_DB: homepage }
+  #   # No `ports`. The database is for the app beside it.
+  #   volumes: [homepage_pgdata:/var/lib/postgresql/data]
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "pg_isready -U homepage -d homepage"]
+  #     interval: 5s
+  #     timeout: 5s
+  #     retries: 10
+
 volumes:
   homepage_data:
+  # homepage_pgdata:
