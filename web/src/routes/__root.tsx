@@ -13,6 +13,7 @@ import { ThemePicker } from '@/components/ui/theme-picker';
 import { useThemePreference } from '@/components/ui/theme-preference';
 import { LayoutGrid } from '@/core/app-icons';
 import { iconElement } from '@/core/page-icons';
+import { ExportButton } from '@/export/export-button';
 import { PageDialog } from '@/pages/page-dialog';
 import { type Page, usePages } from '@/pages/use-pages';
 
@@ -170,7 +171,12 @@ function RootRoute() {
                 ))}
               />
             }
-            footerSlot={<ThemePicker variant="compact" />}
+            footerSlot={
+              <div className="flex flex-col gap-2">
+                <ExportButton />
+                <ThemePicker variant="compact" />
+              </div>
+            }
           />
         }
         contentSlot={<Outlet />}
