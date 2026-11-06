@@ -90,7 +90,7 @@ npm run db:import-yaml -- --data-dir examples/data --replace   # sample pages (s
   reads pages must do the same: hidden things are absent, never FORBIDDEN, so their existence doesn't leak.
 - **An instance with no sign-in set up stays open** (`AuthMode.OPEN`): anyone may do anything. Never lock
   an upgraded instance; say so in the UI instead.
-- **Remote-* headers are believed only from `FORWARD_AUTH_TRUSTED_PROXIES`**, checked against the socket's
+- **`Remote-*` headers are believed only from `FORWARD_AUTH_TRUSTED_PROXIES`**, checked against the socket's
   address, never X-Forwarded-For (`auth/forward-auth.ts`).
 - **Sign-in follows the cubicecho_backend `sso.md` pattern:** better-auth on the database, its endpoints as
   GraphQL, the two OIDC legs in `http/sso.ts`, the pairing in `sso/`, `AuthHost` rebuilt on (un)pairing.
