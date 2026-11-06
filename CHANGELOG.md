@@ -1,3 +1,13 @@
+# [1.3.0](https://github.com/cubicecho/personal-homepage/compare/v1.2.0...v1.3.0) (2026-11-06)
+
+
+### Features
+
+* add widget items to the page model and the YAML store ([863bb84](https://github.com/cubicecho/personal-homepage/commit/863bb84371329784f7fc9c186844793779b926d0)), closes [#2](https://github.com/cubicecho/personal-homepage/issues/2)
+* fetch widget data on the server, with secrets that never leave it ([84589e2](https://github.com/cubicecho/personal-homepage/commit/84589e29271edce2403f61d377ee0ba1e72ccd46)), closes [#2](https://github.com/cubicecho/personal-homepage/issues/2)
+* **web:** fold the sidebar to a rail of icons ([5da9362](https://github.com/cubicecho/personal-homepage/commit/5da936251ef8f8fd08dfc1de5ce147060f96d741))
+* **web:** show widgets on pages and edit them in the item dialog ([d55a95b](https://github.com/cubicecho/personal-homepage/commit/d55a95b4e791b3a128a44da3154719574fba0925)), closes [#2](https://github.com/cubicecho/personal-homepage/issues/2)
+
 # [1.2.0](https://github.com/cubicecho/personal-homepage/compare/v1.1.0...v1.2.0) (2026-11-06)
 
 
