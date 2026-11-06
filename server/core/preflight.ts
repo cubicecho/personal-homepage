@@ -61,7 +61,9 @@ function signInConfigProblem(): string | null {
   } catch (error) {
     return errorMessage(error);
   }
-  const weakness = describeWeakSecret(configuredAuthSecret());
+  // Unset is fine: the server makes one and keeps it (auth/secret.ts). Set, it has to be strong.
+  const configured = configuredAuthSecret() ?? '';
+  const weakness = configured === '' ? undefined : describeWeakSecret(configured);
   if (isProduction() && weakness !== undefined) {
     return `BETTER_AUTH_SECRET ${weakness}. Set a strong random value: generate one with \`openssl rand -hex 32\`.`;
   }

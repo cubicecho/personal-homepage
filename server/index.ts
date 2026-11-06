@@ -2,6 +2,7 @@
 import './core/preflight.ts';
 import { sql } from 'drizzle-orm';
 import { type AuthHost, createAuthHost } from './auth/auth-host.ts';
+import { resolveAuthSecret } from './auth/secret.ts';
 import {
   databaseUrl,
   dataDir,
@@ -76,13 +77,15 @@ const pages = await createDbPageStore(db);
 await importYamlOnBoot(db, dataDir());
 const site = createSiteSettings(db);
 // Built after migrate: it reads the OIDC pairing from the database.
-const authHost = await createAuthHost(db);
+const secret = resolveAuthSecret(dataDir());
+const authHost = await createAuthHost(db, { secret });
 
 const server = createApp({
   pages,
   site,
   db,
   authHost,
+  authSecret: secret,
   dataDir: dataDir(),
   dist: WEB_DIST,
   checkDatabase: () => db.execute(sql`select 1`),

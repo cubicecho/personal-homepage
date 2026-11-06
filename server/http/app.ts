@@ -44,6 +44,8 @@ export interface AppDeps extends Partial<Omit<Services, 'pages' | 'site' | 'db' 
   authHost: AuthHost;
   /** The data directory, where the icon caches live. */
   dataDir: string;
+  /** What favicon links are signed with: the auth secret. The default is `authSecret()`. */
+  authSecret?: string;
   /** Runs a trivial query, rejecting when the database doesn't answer. `/healthz` reports it. */
   checkDatabase: () => Promise<unknown>;
   /** The built web app's directory. Left out in tests. */
@@ -79,7 +81,13 @@ function headersOf(raw: Request['headers']): Headers {
  * where things are.
  * @returns The app.
  */
-export function createApp({ dataDir, dist, checkDatabase, ...deps }: AppDeps): Express {
+export function createApp({
+  dataDir,
+  dist,
+  checkDatabase,
+  authSecret: secret = authSecret(),
+  ...deps
+}: AppDeps): Express {
   const forwardAuth: ForwardAuth = deps.forwardAuth ?? createForwardAuth(forwardAuthTrustedProxies());
   const limiter: RateLimiter = deps.limiter ?? createRateLimiter();
   const services: Services = {
@@ -96,7 +104,7 @@ export function createApp({ dataDir, dist, checkDatabase, ...deps }: AppDeps): E
   };
   const iconLinks = (): IconLinks => ({
     isRequired: authModeOf(services) === AuthMode.SignIn,
-    secret: authSecret(),
+    secret,
     now: Date.now,
   });
   const accessFor = (req: Request): Promise<Access> =>

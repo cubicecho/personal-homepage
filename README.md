@@ -270,32 +270,32 @@ exist. The first becomes the admin.
 
 ### Who may see and change what
 
-| | Open (no sign-in set up) | Sign-in set up |
-| --- | --- | --- |
-| See the pages | Anyone | Anyone signed in, or anyone at all with `PUBLIC_VIEW=true` |
-| Change anything | Anyone | The admin (the first account), and members of `ADMIN_GROUPS` (comma-separated) |
-| Pair or disconnect a provider | Anyone | The same editors; anyone while nobody has an account yet |
+|                               | Open (no sign-in set up) | Sign-in set up                                                                 |
+| ----------------------------- | ------------------------ | ------------------------------------------------------------------------------ |
+| See the pages                 | Anyone                   | Anyone signed in, or anyone at all with `PUBLIC_VIEW=true`                     |
+| Change anything               | Anyone                   | The admin (the first account), and members of `ADMIN_GROUPS` (comma-separated) |
+| Pair or disconnect a provider | Anyone                   | The same editors; anyone while nobody has an account yet                       |
 
 **Limiting by group:** a page, section or item can be limited to groups with **Who can see it** in its dialog
 (`visibleTo`). People outside those groups don't see it anywhere:
 
 - it is missing from the pages, search, status checks and widget data
 - it is left out of the zip they download
-- its address answers *not found*
+- its address answers _not found_
 
 Editors see everything, to be able to manage it.
 
 ### Settings
 
-| Variable | Meaning |
-| --- | --- |
-| `APP_URL` | Where people open the homepage, such as `https://home.example.com`. Needed for the OIDC redirect. |
-| `BETTER_AUTH_SECRET` | What sessions are signed with. Required in production: `openssl rand -hex 32`. |
-| `OIDC_ISSUER`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET` | A provider set in the environment, instead of pairing. |
-| `OIDC_NAME`, `OIDC_CLIENT_AUTH`, `OIDC_GROUPS_CLAIM` | Its button name, how the secret is sent, and the groups claim. |
-| `FORWARD_AUTH_TRUSTED_PROXIES` | Addresses and CIDR ranges whose `Remote-*` headers are believed. |
-| `ADMIN_GROUPS` | Groups whose members may edit, besides the admin. |
-| `PUBLIC_VIEW` | `true` to let people who are not signed in see (not change) the pages. |
+| Variable                                              | Meaning                                                                                           |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `APP_URL`                                             | Where people open the homepage, such as `https://home.example.com`. Needed for the OIDC redirect. |
+| `BETTER_AUTH_SECRET`                                  | What sessions are signed with. Unset, one is made and kept in `DATA_DIR/auth-secret`.             |
+| `OIDC_ISSUER`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET` | A provider set in the environment, instead of pairing.                                            |
+| `OIDC_NAME`, `OIDC_CLIENT_AUTH`, `OIDC_GROUPS_CLAIM`  | Its button name, how the secret is sent, and the groups claim.                                    |
+| `FORWARD_AUTH_TRUSTED_PROXIES`                        | Addresses and CIDR ranges whose `Remote-*` headers are believed.                                  |
+| `ADMIN_GROUPS`                                        | Groups whose members may edit, besides the admin.                                                 |
+| `PUBLIC_VIEW`                                         | `true` to let people who are not signed in see (not change) the pages.                            |
 
 ## Security
 
