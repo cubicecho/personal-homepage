@@ -151,14 +151,19 @@ function WeatherResultView({ result }: { result: WeatherResult }) {
         </div>
       </div>
       {result.hours.length === 0 ? null : (
-        <ul aria-label="Coming hours" className="flex gap-2 overflow-x-auto pb-1">
+        // One row of as many hours as fit the card, 4rem each at least: the rest sit on rows of no
+        // height, clipped, so the strip never scrolls sideways. A screen reader still reads every hour.
+        <ul
+          aria-label="Coming hours"
+          className="grid auto-rows-[0] grid-cols-[repeat(auto-fill,minmax(4rem,1fr))] grid-rows-[auto] gap-x-2 overflow-hidden"
+        >
           {result.hours.map((hour) => {
             const HourGlyph = weatherGlyph(hour.weatherCode, hour.isDay);
             const chance = hour.precipitationChance ?? 0;
             return (
               <li
                 key={hour.time}
-                className="flex min-w-16 flex-col items-center gap-1 rounded-md border border-foreground/10 px-2 py-1.5 text-xs"
+                className="flex min-w-0 flex-col items-center gap-1 rounded-md border border-foreground/10 px-1 py-1.5 text-xs"
               >
                 <span className="text-foreground/60">{hourOf(hour.time)}</span>
                 <HourGlyph className="size-5" aria-hidden />

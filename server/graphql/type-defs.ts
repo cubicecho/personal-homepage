@@ -10,14 +10,14 @@ export const TYPE_DEFS = /* GraphQL */ `
     WIDGET
   }
 
-  "How many columns of its section's grid an item spans. The web app clamps it to the columns there is room for."
-  enum ColumnSpan {
-    ONE
-    TWO
-    THREE
-    FOUR
-    "Every column, on a row of its own."
-    FULL
+  "How a section's grid is laid out, for every page."
+  type SiteLayout {
+    "How many columns a section's grid has at full width. A narrower screen gets fewer."
+    columns: Int!
+    "The fewest columns the setting may name."
+    minColumns: Int!
+    "The most columns the setting may name, and so the widest an item can be set to."
+    maxColumns: Int!
   }
 
   "Where a link opens."
@@ -150,8 +150,13 @@ export const TYPE_DEFS = /* GraphQL */ `
     description: String
     "Height of the inline frame, in CSS pixels. Set for FRAME items only."
     frameHeightPx: Int
-    "How many grid columns it spans. Always ONE for a LINK."
-    columnSpan: ColumnSpan!
+    """
+    Grid columns it spans when not full width. Always 1 for a LINK. The web app shows at most the columns
+    the grid has, so an item wider than the Columns setting is drawn full width without changing this.
+    """
+    columnSpan: Int!
+    "Whether it takes a row of its own, every column wide. Never for a LINK."
+    fullWidth: Boolean!
     "Whether the server checks this item's status."
     checkEnabled: Boolean!
     "The URL checked instead of url, such as an internal health endpoint. Null checks url."
@@ -387,6 +392,8 @@ export const TYPE_DEFS = /* GraphQL */ `
     iconSearch(query: String!, limit: Int): [IconOption!]!
     "The web searches the launcher offers."
     searchEngines: [SearchEngine!]!
+    "How a section's grid is laid out."
+    siteLayout: SiteLayout!
     "A widget item's latest data, from cache when fresh. NOT_FOUND when the page or item doesn't exist."
     widgetData(pageSlug: ID!, itemId: ID!): WidgetData!
     "Runs a widget that hasn't been saved, for the editor's test."
@@ -487,8 +494,10 @@ export const TYPE_DEFS = /* GraphQL */ `
     description: String
     "FRAME only, in CSS pixels; PageLimits.defaultFrameHeightPx when left out. Ignored for LINK."
     frameHeightPx: Int
-    "FRAME and WIDGET only; FULL for a frame and TWO for a widget when left out. A LINK is always ONE."
-    columnSpan: ColumnSpan
+    "FRAME and WIDGET only, 1 to SiteLayout.maxColumns; 2 when left out. A LINK is always 1."
+    columnSpan: Int
+    "FRAME and WIDGET only; true for a frame and false for a widget when left out. Never for a LINK."
+    fullWidth: Boolean
     "Defaults to true, except for a WIDGET."
     checkEnabled: Boolean
     "Blank or left out to check url."
@@ -519,6 +528,8 @@ export const TYPE_DEFS = /* GraphQL */ `
   type Mutation {
     "Replaces the launcher's web searches and returns them. Null goes back to the built-in ones."
     setSearchEngines(input: SearchSettingsInput): [SearchEngine!]!
+    "Sets how many columns a section's grid has, SiteLayout.minColumns to maxColumns. Null goes back to the default."
+    setLayoutColumns(columns: Int): SiteLayout!
     "Adds a page at the end of the list."
     createPage(input: CreatePageInput!): Page!
     "Changes a page's title or icon."

@@ -1,3 +1,33 @@
+# [3.4.0](https://github.com/cubicecho/personal-homepage/compare/v3.3.0...v3.4.0) (2026-11-06)
+
+
+### Features
+
+* **web:** put "Go to <page>" in the toast after moving an item ([c7ac629](https://github.com/cubicecho/personal-homepage/commit/c7ac629e10125888fe8ae714a2ba7963d17d533d)), closes [cubeui#403](https://github.com/cubeui/issues/403)
+
+# [3.3.0](https://github.com/cubicecho/personal-homepage/compare/v3.2.0...v3.3.0) (2026-11-06)
+
+
+### Features
+
+* let the site set its column count, and size items in those columns ([696609c](https://github.com/cubicecho/personal-homepage/commit/696609c3fae88d37e195ee61b23e45876e07bf35))
+* **web:** lay sections out in the site's columns, and tidy the cards ([9a179c1](https://github.com/cubicecho/personal-homepage/commit/9a179c1ba7aa247259a19ec65c27f78bb467cd4e))
+
+# [3.2.0](https://github.com/cubicecho/personal-homepage/compare/v3.1.1...v3.2.0) (2026-11-06)
+
+
+### Features
+
+* add the page you're on to the homepage with a bookmarklet ([6236d47](https://github.com/cubicecho/personal-homepage/commit/6236d47b6aba8a4b56f0d6b7fbacc3b3052b288c))
+* **web:** come back to the page you were opening after signing in ([4329dbd](https://github.com/cubicecho/personal-homepage/commit/4329dbdfafa33481ae6d2dfad1a5a647589e4a27))
+
+## [3.1.1](https://github.com/cubicecho/personal-homepage/compare/v3.1.0...v3.1.1) (2026-11-06)
+
+
+### Bug Fixes
+
+* **discovery:** say what went wrong when Dockhand or the Docker socket can't be read ([bcbd626](https://github.com/cubicecho/personal-homepage/commit/bcbd626a9d36c079cb8f82dda099ab8cbba8481b))
+
 # [3.1.0](https://github.com/cubicecho/personal-homepage/compare/v3.0.1...v3.1.0) (2026-11-06)
 
 

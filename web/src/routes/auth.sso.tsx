@@ -1,5 +1,6 @@
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import { useEffect, useRef } from 'react';
+import { takeReturnTo } from '@/auth/return-to';
 import { useFinishSignIn } from '@/auth/use-access';
 import { CenteredLayout } from '@/components/centered-layout';
 import { Button } from '@/components/ui/button';
@@ -18,7 +19,8 @@ export const Route = createFileRoute('/auth/sso')({
 });
 
 /**
- * Where the provider's sign-in lands: spends the one-time token for a session, then goes home.
+ * Where the provider's sign-in lands: spends the one-time token for a session, then goes back to the page
+ * that sent the browser to sign in, or home.
  *
  * @returns The page, while it works or when it failed.
  *
@@ -36,7 +38,10 @@ function FinishSignInRoute() {
       return;
     }
     hasStarted.current = true;
-    finish.mutate(token, { onSuccess: () => void navigate({ to: '/', replace: true }) });
+    finish.mutate(token, {
+      // Back to the page that sent the browser to sign in (a bookmarklet's /add?…), or home.
+      onSuccess: () => void navigate({ href: takeReturnTo() ?? '/', replace: true }),
+    });
   }, [token, finish, navigate]);
 
   const isFailed = token === undefined || finish.isError;

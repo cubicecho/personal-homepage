@@ -1,5 +1,5 @@
-import { useNavigate } from '@tanstack/react-router';
-import { useRef, useState } from 'react';
+import { Link } from '@tanstack/react-router';
+import { useState } from 'react';
 import { SelectField, useAppForm } from '@/components/app-form';
 import { DialogLayout } from '@/components/dialog-layout';
 import { Alert } from '@/components/ui/alert';
@@ -32,31 +32,15 @@ interface Target {
  * @returns The dialog.
  *
  * @remarks
- * A move to another page leaves the reader where they are and says where the item went; "Move and go
- * there" opens that page instead.
+ * A move to another page leaves the reader where they are, and the toast that says where the item went
+ * holds a link to go there.
  */
 export function MoveItemDialog({ open, onOpenChange, page, item, sectionId }: MoveItemDialogProps) {
   const pages = usePages().data ?? [page];
   const moveItem = useMoveItem();
   const moveToPage = useMoveItemToPage();
   const toast = useToast();
-  const navigate = useNavigate();
   const [serverError, setServerError] = useState<string | undefined>(undefined);
-  /** Set by "Move and go there" just before it submits. */
-  const shouldFollow = useRef(false);
-
-  /**
-   * Opens a page.
-   *
-   * @param target - The page.
-   */
-  const openPage = (target: Page): void => {
-    if (target.isHome) {
-      void navigate({ to: '/' });
-      return;
-    }
-    void navigate({ to: '/pages/$slug', params: { slug: target.slug } });
-  };
 
   /**
    * Moves the item where the form says.
@@ -76,11 +60,9 @@ export function MoveItemDialog({ open, onOpenChange, page, item, sectionId }: Mo
       toPageSlug: pageSlug,
       toSectionId: toSectionId === '' ? null : toSectionId,
     });
-    if (shouldFollow.current) {
-      openPage(to);
-      return;
-    }
-    toast(`Moved ${item.title} to ${to.title}.`, 'positive');
+    toast(`Moved ${item.title} to ${to.title}.`, 'positive', {
+      actionSlot: (dismiss) => <GoToPageLink page={to} onFollow={dismiss} />,
+    });
   };
 
   const form = useAppForm({
@@ -92,8 +74,6 @@ export function MoveItemDialog({ open, onOpenChange, page, item, sectionId }: Mo
         onOpenChange(false);
       } catch (error) {
         setServerError(messageOf(error) ?? 'The item was not moved. Try again.');
-      } finally {
-        shouldFollow.current = false;
       }
     },
   });
@@ -151,20 +131,6 @@ export function MoveItemDialog({ open, onOpenChange, page, item, sectionId }: Mo
       footerActionsSlot={(close) => (
         <>
           <Button variant="outline" onClick={close} content="Cancel" />
-          <form.Subscribe selector={(state) => state.values.pageSlug !== page.slug && state.isSubmitting === false}>
-            {(canFollow) =>
-              canFollow ? (
-                <Button
-                  variant="outline"
-                  content="Move and go there"
-                  onClick={() => {
-                    shouldFollow.current = true;
-                    void form.handleSubmit();
-                  }}
-                />
-              ) : null
-            }
-          </form.Subscribe>
           <form.AppForm>
             <form.SubmitButton requireChanges variant="info" content="Move" pendingLabel="Moving…" />
           </form.AppForm>
@@ -172,4 +138,26 @@ export function MoveItemDialog({ open, onOpenChange, page, item, sectionId }: Mo
       )}
     />
   );
+}
+
+interface GoToPageLinkProps {
+  /** The page the item went to. */
+  page: Page;
+  /** Called as the link is followed: closes the toast it sits in. */
+  onFollow: () => void;
+}
+
+/**
+ * A link-styled "Go to <page>", for the toast that says an item moved.
+ *
+ * @param props - The page, and what to do as the link is followed.
+ * @returns The link.
+ */
+function GoToPageLink({ page, onFollow }: GoToPageLinkProps) {
+  const link = page.isHome ? (
+    <Link to="/" onClick={onFollow} />
+  ) : (
+    <Link to="/pages/$slug" params={{ slug: page.slug }} onClick={onFollow} />
+  );
+  return <Button variant="link" size="sm" className="h-auto px-0" linkSlot={link} content={`Go to ${page.title}`} />;
 }

@@ -1,7 +1,7 @@
 import { GraphQLError } from 'graphql';
-import { PAGE_LIMIT_DEFAULTS } from '../../server/core/defaults.ts';
+import { LAYOUT_DEFAULTS, PAGE_LIMIT_DEFAULTS } from '../../server/core/defaults.ts';
 import { ErrorCode } from '../../server/core/errors.ts';
-import { ColumnSpan, ItemKind, OpensIn } from '../../server/pages/page.ts';
+import { ItemKind, OpensIn } from '../../server/pages/page.ts';
 import { parseItemFields, parseNewPage, parsePagePatch, parseSectionFields } from '../../server/pages/page-input.ts';
 
 /**
@@ -45,7 +45,8 @@ describe('parseItemFields', () => {
       icon: null,
       description: null,
       frameHeightPx: null,
-      columnSpan: ColumnSpan.One,
+      columnSpan: 1,
+      fullWidth: false,
       check: { enabled: true, url: null },
       widget: null,
       visibleTo: [],
@@ -157,18 +158,22 @@ describe('parseSectionFields', () => {
   });
 });
 
-describe('parseItemFields column span', () => {
+describe('parseItemFields width', () => {
+  const widthOf = (input: Record<string, unknown>) => {
+    const { columnSpan, fullWidth } = parseItemFields({ ...link, ...input });
+    return { columnSpan, fullWidth };
+  };
+
   it('gives each kind its default width and keeps a link at one column', () => {
-    expect(parseItemFields({ ...link, kind: ItemKind.Frame }).columnSpan).toBe(ColumnSpan.Full);
-    expect(parseItemFields({ ...link, columnSpan: ColumnSpan.Three }).columnSpan).toBe(ColumnSpan.One);
-    expect(parseItemFields({ ...link, kind: ItemKind.Frame, columnSpan: ColumnSpan.Two }).columnSpan).toBe(
-      ColumnSpan.Two,
-    );
+    expect(widthOf({ kind: ItemKind.Frame })).toEqual({ columnSpan: 2, fullWidth: true });
+    expect(widthOf({ columnSpan: 3, fullWidth: true })).toEqual({ columnSpan: 1, fullWidth: false });
+    expect(widthOf({ kind: ItemKind.Frame, columnSpan: 6, fullWidth: false })).toEqual({
+      columnSpan: 6,
+      fullWidth: false,
+    });
   });
 
-  it('refuses a width that is not one of the spans', () => {
-    expect(codeOf(() => parseItemFields({ ...link, kind: ItemKind.Frame, columnSpan: 'FIVE' }))).toBe(
-      ErrorCode.BadUserInput,
-    );
+  it.each([0, LAYOUT_DEFAULTS.maxColumns + 1, 2.5, 'TWO'])('refuses a column span of %s', (columnSpan) => {
+    expect(codeOf(() => parseItemFields({ ...link, kind: ItemKind.Frame, columnSpan }))).toBe(ErrorCode.BadUserInput);
   });
 });

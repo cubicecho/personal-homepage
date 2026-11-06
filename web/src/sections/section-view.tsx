@@ -1,18 +1,19 @@
-import type { ReactNode } from 'react';
-import { useCanEdit } from '@/auth/use-access';
+import { type ReactNode, useRef } from 'react';
 import { Disclosure } from '@/components/disclosure';
 import { EmptyState } from '@/components/empty-state';
 import { Button } from '@/components/ui/button';
 import { Plus } from '@/components/ui/icons';
-import { cn } from '@/lib/utils';
-import { SECTION_GRID, SPAN_CLASSES } from '@/pages/column-span';
+import { spanStyle } from '@/pages/column-span';
 import { ItemFrame } from '@/pages/item-frame';
 import { ItemMenu } from '@/pages/item-menu';
 import { ItemTile } from '@/pages/item-tile';
 import { hasAddress, type Item, type Page, type Section } from '@/pages/use-pages';
+import { useIsEditing } from '@/shell/edit-mode';
 import { WidgetCard } from '@/widgets/widget-card';
 import { useSectionOpen } from './fold-state';
 import { SectionMenu } from './section-menu';
+import { useSectionColumns } from './use-section-columns';
+import { useLayoutColumns } from './use-site-layout';
 
 /** An item and where it sits in its section. */
 interface IndexedItem<T extends Item = Item> {
@@ -37,10 +38,11 @@ interface SectionViewProps {
  */
 export function SectionView({ page, section, index, onAddItem, onEditItem }: SectionViewProps) {
   const [isOpen, setOpen] = useSectionOpen(page.slug, section);
-  const canEdit = useCanEdit();
-  const menu = canEdit ? <SectionMenu page={page} section={section} index={index} onAddItem={onAddItem} /> : null;
+  // Folding a titled section is reading, not editing, so it works in view mode too; its menu does not.
+  const isEditing = useIsEditing();
+  const menu = isEditing ? <SectionMenu page={page} section={section} index={index} onAddItem={onAddItem} /> : null;
   const items = (
-    <SectionItems page={page} section={section} canEdit={canEdit} onAddItem={onAddItem} onEditItem={onEditItem} />
+    <SectionItems page={page} section={section} isEditing={isEditing} onAddItem={onAddItem} onEditItem={onEditItem} />
   );
 
   if (section.title === null) {
@@ -62,7 +64,8 @@ export function SectionView({ page, section, index, onAddItem, onEditItem }: Sec
       onOpenChange={setOpen}
       actionSlot={menu}
       titleClassName="font-semibold text-base text-foreground"
-      contentClassName="pt-3"
+      // The disclosure indents its body under the chevron; cards line up with the page's other sections instead.
+      contentClassName="pt-3 pl-0"
       contentSlot={items}
     />
   );
@@ -71,21 +74,24 @@ export function SectionView({ page, section, index, onAddItem, onEditItem }: Sec
 interface SectionItemsProps {
   page: Page;
   section: Section;
-  /** Whether the caller may change the section: without it, no menus and no add button. */
-  canEdit: boolean;
+  /** Whether the page is in edit mode: outside it, no menus and no add button. */
+  isEditing: boolean;
   onAddItem: () => void;
   onEditItem: (item: Item) => void;
 }
 
 /** A section's items in one grid: tiles one column wide, frames and widgets their chosen width; or one line saying it is empty. */
-function SectionItems({ page, section, canEdit, onAddItem, onEditItem }: SectionItemsProps) {
+function SectionItems({ page, section, isEditing, onAddItem, onEditItem }: SectionItemsProps) {
+  const gridRef = useRef<HTMLUListElement>(null);
+  const columns = useSectionColumns(gridRef, useLayoutColumns());
+
   if (section.items.length === 0) {
     return (
       <EmptyState
         compact
         title="Nothing in this section yet."
         actionSlot={
-          canEdit ? (
+          isEditing ? (
             <Button size="sm" variant="outline" iconSlot={<Plus />} content="Add item" onClick={onAddItem} />
           ) : null
         }
@@ -100,7 +106,7 @@ function SectionItems({ page, section, canEdit, onAddItem, onEditItem }: Section
    * @returns The menu.
    */
   const menuFor = ({ item, index }: IndexedItem) =>
-    canEdit ? (
+    isEditing ? (
       <ItemMenu page={page} section={section} item={item} index={index} onEdit={() => onEditItem(item)} />
     ) : null;
   const label = section.title === null ? `${page.title} items` : `${section.title} items`;
@@ -128,14 +134,18 @@ function SectionItems({ page, section, canEdit, onAddItem, onEditItem }: Section
   };
 
   return (
-    <div className="@container w-full">
-      <ul aria-label={label} className={SECTION_GRID}>
-        {section.items.map((item, index) => (
-          <li key={item.id} className={cn('min-w-0', SPAN_CLASSES[item.columnSpan])}>
-            {cardFor({ item, index })}
-          </li>
-        ))}
-      </ul>
-    </div>
+    <ul
+      ref={gridRef}
+      aria-label={label}
+      // items-start: a tile keeps its own height beside a tall widget instead of stretching to the row's.
+      className="grid w-full items-start gap-4"
+      style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}
+    >
+      {section.items.map((item, index) => (
+        <li key={item.id} className="min-w-0" style={spanStyle(item, columns)}>
+          {cardFor({ item, index })}
+        </li>
+      ))}
+    </ul>
   );
 }

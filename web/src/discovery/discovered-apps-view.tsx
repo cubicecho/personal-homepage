@@ -98,7 +98,15 @@ function SourcesCard() {
               <ListItem
                 key={source.source}
                 title={SOURCE_NAMES[source.source]}
-                description={sourceLine(source, now)}
+                description={
+                  source.error === null ? (
+                    sourceLine(source, now)
+                  ) : (
+                    // An element, not a string, so the row doesn't clamp it to two lines: the whole
+                    // sentence is what says what to change.
+                    <span className="whitespace-normal break-words text-foreground/80 text-xs">{source.error}</span>
+                  )
+                }
                 actionSlot={<Badge variant={isWorking ? 'positive' : 'default'}>{sourceState(source)}</Badge>}
               />
             );

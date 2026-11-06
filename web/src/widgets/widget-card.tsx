@@ -49,8 +49,9 @@ export function WidgetCard({ page, item, menuSlot }: WidgetCardProps) {
   const fetchedAt = data?.fetchedAt ?? null;
   return (
     <CardLayout
-      className="h-full"
       title={title}
+      // One line at any width: a narrow card cuts the title short rather than dropping the menu below it.
+      headerClassName="flex-nowrap"
       // As tall as the 28px controls beside it, so the title and they share a centre line.
       titleClassName="leading-7"
       iconSlot={iconElement(item.icon, type.Glyph, item.iconUrl)}

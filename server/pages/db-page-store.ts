@@ -10,8 +10,7 @@ import { badInput, notFound } from '../core/errors.ts';
 import type { Database } from '../db/client.ts';
 import { discoveredApps, type ItemRow, items, type PageRow, pages, type SectionRow, sections } from '../db/schema.ts';
 import {
-  ColumnSpan,
-  DEFAULT_COLUMN_SPAN,
+  DEFAULT_ITEM_WIDTH,
   HOME_SLUG,
   type Item,
   ItemKind,
@@ -97,8 +96,7 @@ function widgetFromRow(row: ItemRow): Widget | null {
 function itemFromRow(row: ItemRow): Item {
   const kind = memberOf(Object.values(ItemKind), row.kind);
   const isLink = kind === ItemKind.Link;
-  const storedSpan =
-    row.columnSpan === null ? DEFAULT_COLUMN_SPAN[kind] : memberOf(Object.values(ColumnSpan), row.columnSpan);
+  const width = DEFAULT_ITEM_WIDTH[kind];
   return {
     id: row.id,
     kind,
@@ -108,7 +106,8 @@ function itemFromRow(row: ItemRow): Item {
     icon: row.icon,
     description: row.description,
     frameHeightPx: row.frameHeightPx,
-    columnSpan: isLink ? ColumnSpan.One : storedSpan,
+    columnSpan: isLink ? 1 : (row.columnSpan ?? width.columnSpan),
+    fullWidth: isLink ? false : (row.fullWidth ?? width.fullWidth),
     check: { enabled: row.checkEnabled, url: row.checkUrl },
     widget: widgetFromRow(row),
     visibleTo: row.visibleTo,
@@ -275,6 +274,7 @@ export async function writePage(tx: Transaction, page: Page): Promise<Page> {
       description: item.description,
       frameHeightPx: item.frameHeightPx,
       columnSpan: item.columnSpan,
+      fullWidth: item.fullWidth,
       checkEnabled: item.check.enabled,
       checkUrl: item.check.url,
       // The YAML mapping, secret references as written: never a resolved value.

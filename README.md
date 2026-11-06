@@ -11,19 +11,26 @@ A self-hosted start page for your network. Every edit is made in the web app.
   - **Frames** show a service inline on the page, at a height you set.
   - **Widgets** show data the server fetches: values picked out of a JSON API, a feed's latest entries, or the
     weather. See [Widgets](#widgets).
-- **Widths:** a section's items sit in one grid of up to four columns, fewer on a narrower screen and one on a
-  phone. A tile takes one column. A frame (full width by default) or a widget (two columns by default) can take 1 to
-  4 columns or the full width: **Width** in its dialog (`columnSpan` in the API).
+- **Widths:** a section's items sit in one grid with as many columns as **Settings → General → Columns** says
+  (1–8, default 4), fewer on a narrower screen and one on a phone. A tile takes one column. A frame (full width by
+  default) or a widget (two columns by default) can take 1 column up to that setting, or the full width: **Width**
+  in its dialog (`columnSpan` and `fullWidth` in the API). An item set wider than the page has is drawn as wide as
+  the page, and keeps its setting.
 - **Moving things:** pages, sections and items move up and down from their **⋯** menus. **Move…** on an item puts
-  it in another section, or on another page with everything about it.
+  it in another section, or on another page with everything about it; a notice then offers **Go to** that page.
 - **Status dots** on items show whether each service answers, checked by the server.
-- **Search:** press Ctrl+K (or ⌘K), or `/`, or just start typing anywhere. It finds items and pages on every
-  page, opens addresses, and sends anything else to a web search. Start with `!g` or another prefix to pick the
-  search engine.
+- **Search:** press Ctrl+K (⌘K on a Mac), or the Search button. It finds items and pages on every page, opens
+  addresses, and sends anything else to a web search. Start with `!g` or another prefix to pick the search engine.
+- **Edit mode:** pages open in view mode, with no menus or Add buttons and frames showing only the service.
+  **Edit** in the page header (Ctrl+Shift+E, ⌘⇧E on a Mac) shows the editing controls; **Done** hides them again.
+  Each browser remembers it. Only people who can edit see the button.
+- **Keyboard shortcuts:** Ctrl+/ (⌘/ on a Mac), or **Keyboard shortcuts** in the sidebar, lists them all. Every
+  shortcut holds Ctrl or ⌘, and none fires while you're typing in a field or a dialog is open.
 - **The sidebar folds** to a rail of icons, with the button at its foot or Ctrl+B (⌘B). Each browser remembers.
   On a phone it is a bar across the top instead.
-- **Discovery** suggests apps it finds on your network, and **sign-in** through heautou limits who may see and
-  change what. See [Discovery](#discovery) and [Sign-in](#sign-in).
+- **Discovery** suggests apps it finds on your network, a **bookmarklet** adds the site you're on, and **sign-in**
+  through heautou limits who may see and change what. See [Discovery](#discovery), [Bookmarklet](#bookmarklet) and
+  [Sign-in](#sign-in).
 
 Pages are kept in a database: a built-in one (PGlite, which is Postgres running inside the server) in `DATA_DIR`,
 or your own Postgres server. The web app reads and writes them through a GraphQL API.
@@ -251,18 +258,45 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
 ```
 
+**When a name points at the container itself.** Some hosts list their own name against a loopback address in
+`/etc/hosts` (`127.0.1.1 framework.lan`). Inside the container, that name then reaches the homepage instead of the
+host. Dockhand's card says so when it happens ("…answered with this homepage's own page…"). The same wrong address
+breaks status checks, favicons, frame checks, widgets and **Fill in** for anything on that host. Tell the container
+where the name really is:
+
+```yaml
+extra_hosts:
+  - "framework.lan:host-gateway" # or the host's LAN IP, e.g. "framework.lan:192.168.1.20"
+```
+
+Using the IP address in `DOCKHAND_URL` works too, but only fixes Dockhand.
+
+## Bookmarklet
+
+**Settings → Bookmarklet** has an **Add to homepage** button to drag to your browser's bookmarks bar. Click
+that bookmark on any site, and the homepage opens at `/add` with the site's address, title and description
+filled in. **Fill in** then adds its icon. Pick a page and section, and save.
+
+- The bookmarklet opens `APP_URL`, or the address recorded when sign-in was paired, or else the address you
+  had Settings open at. Settings warns when that is `localhost`, which only works on the same machine.
+- On a phone, copy the code from the same page and paste it as a bookmark's address.
+- Signing in on the way keeps the `/add?…` address, so you land on the filled-in dialog afterwards.
+- `/add` accepts only `http` and `https` addresses. A few sites with strict security settings stop
+  bookmarklets from running; use **Add item** there.
+
 ## The API
 
 GraphQL at `/graphql`. In development, GraphiQL is served there too. `schema.graphql` is printed by `npm run codegen`
 (it is generated, not committed).
 
 - **Queries:** `pages`, `page(slug)`, `pageLimits`, `itemStatuses(pageSlug)`, `frameCheck(url)`,
-  `iconSearch(query)`, `searchEngines`, `widgetData(pageSlug, itemId)` and `widgetPreview(input)`.
+  `iconSearch(query)`, `widgetData(pageSlug, itemId)` and `widgetPreview(input)`.
 - **Page mutations:** `createPage`, `updatePage`, `deletePage`, `movePage`.
 - **Section mutations:** `addSection`, `updateSection`, `removeSection`, `moveSection`.
 - **Item mutations:** `addItem`, `updateItem`, `removeItem`, `moveItem` (within a page, into another section too)
   and `moveItemToPage` (to another page, returning both pages and the item's id there).
-- **Settings:** `setSearchEngines`.
+- **Settings:** `siteLayout` (the Columns setting) and `searchEngines`; the mutations `setLayoutColumns` and
+  `setSearchEngines`.
 - **Discovery (editors only):** `discoveredApps(includeDismissed)`, `discoverySources` and `describeUrl(url)`; the
   mutations `rescanDiscovery` and `dismissDiscoveredApp`. `ItemInput.discoveredId` links an item to the app it
   came from.
