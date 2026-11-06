@@ -95,6 +95,8 @@ export interface Item {
   check: StatusCheck;
   /** What a WIDGET shows. Null for the other kinds. */
   widget: Widget | null;
+  /** The groups that may see it. Empty means everyone who may see the homepage. */
+  visibleTo: string[];
 }
 
 /** A group of items on a page, with an optional heading. */
@@ -105,6 +107,8 @@ export interface Section {
   title: string | null;
   /** Whether it starts folded. A browser remembers its own choice after that. */
   collapsed: boolean;
+  /** The groups that may see it. Empty means everyone who may see the homepage. */
+  visibleTo: string[];
   items: Item[];
 }
 
@@ -114,6 +118,8 @@ export interface Page {
   slug: string;
   title: string;
   icon: IconRef | null;
+  /** The groups that may see it. Empty means everyone who may see the homepage. */
+  visibleTo: string[];
   sections: Section[];
 }
 
@@ -123,18 +129,23 @@ export interface NewPage {
   /** Made from the title when left out. */
   slug?: string;
   icon: IconRef | null;
+  /** The groups that may see it. Empty means everyone who may see the homepage. */
+  visibleTo: string[];
 }
 
 /** The parts of a page that can change. Already validated. A key left out is kept. */
 export interface PagePatch {
   title?: string;
   icon?: IconRef | null;
+  visibleTo?: string[];
 }
 
 /** What a section is made from, or replaced with. Already validated. */
 export interface SectionFields {
   title: string | null;
   collapsed: boolean;
+  /** The groups that may see it. Empty means everyone who may see the homepage. */
+  visibleTo: string[];
 }
 
 /**
@@ -152,6 +163,8 @@ export interface ItemFields {
   frameHeightPx: number | null;
   check: StatusCheck;
   widget: Widget | null;
+  /** The groups that may see it. Empty means everyone who may see the homepage. */
+  visibleTo: string[];
 }
 
 /**

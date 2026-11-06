@@ -4,6 +4,7 @@ import path from 'node:path';
 import express from 'express';
 import { strFromU8, unzipSync } from 'fflate';
 import { parse } from 'yaml';
+import { OPEN_ACCESS } from '../../server/auth/access.ts';
 import type { OpenedDatabase } from '../../server/db/client.ts';
 import { importYamlData } from '../../server/db/import-yaml.ts';
 import { EXPORT_PATH, exportFilename, mountExport } from '../../server/export/zip-export.ts';
@@ -40,9 +41,9 @@ describe('zip export', () => {
     await resetTestDatabase(database.db);
     pages = await createDbPageStore(database.db);
     site = createSiteSettings(database.db);
-    await pages.createPage({ title: 'Media', icon: 'film' });
+    await pages.createPage({ title: 'Media', icon: 'film', visibleTo: [] });
     await pages.addItem('media', null, linkFields('Jellyfin'));
-    await pages.addSection('media', { title: 'Watch', collapsed: true });
+    await pages.addSection('media', { title: 'Watch', collapsed: true, visibleTo: [] });
     await pages.addItem(
       'media',
       'watch',
@@ -63,7 +64,12 @@ describe('zip export', () => {
     );
 
     const app = express();
-    mountExport(app, { pages, site }, () => FIXED_DATE);
+    mountExport(
+      app,
+      { pages, site },
+      async () => OPEN_ACCESS,
+      () => FIXED_DATE,
+    );
     server = app.listen(0);
     await new Promise<void>((resolve) => server.once('listening', resolve));
   });

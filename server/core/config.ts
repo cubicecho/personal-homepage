@@ -1,6 +1,6 @@
 // Getters, not constants, so a test sees the current environment.
 import { createRequire } from 'node:module';
-import { DATABASE_DEFAULTS, HTTP_DEFAULTS, STORE_DEFAULTS, WIDGET_DEFAULTS } from './defaults.ts';
+import { AUTH_DEFAULTS, DATABASE_DEFAULTS, HTTP_DEFAULTS, STORE_DEFAULTS, WIDGET_DEFAULTS } from './defaults.ts';
 
 const NODE_ENV_PRODUCTION = 'production';
 /** The TRUST_PROXY value that trusts no hop. */
@@ -104,6 +104,157 @@ export const trustProxy = (): boolean | number | string => {
   const isHopCount = HOP_COUNT.test(raw);
   return isHopCount ? Number(raw) : raw;
 };
+
+/**
+ * Reads an environment variable, trimmed.
+ *
+ * @param name - The variable.
+ * @returns Its value, or an empty string when it is unset.
+ */
+function env(name: string): string {
+  return (process.env[name] ?? '').trim();
+}
+
+/**
+ * Splits a comma-separated list.
+ *
+ * @param raw - The value.
+ * @returns Its entries, trimmed, without blanks.
+ */
+function commaList(raw: string): string[] {
+  return raw
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter((entry) => entry !== '');
+}
+
+/** What signs sessions when `BETTER_AUTH_SECRET` is unset. Preflight refuses it in production. */
+export const DEV_SECRET = 'dev-secret-change-this-before-production';
+/** The value `.env.example` ships. Public, so as good as no secret at all. */
+export const PLACEHOLDER_SECRET = 'change-me-to-a-long-random-string';
+
+/**
+ * Says why a secret must not sign production sessions.
+ *
+ * @param secret - `BETTER_AUTH_SECRET` as set.
+ * @returns The reason, as the end of a sentence ("is not set"), or undefined when it may.
+ */
+export function describeWeakSecret(secret: string | undefined): string | undefined {
+  if (secret === undefined || secret === '') {
+    return 'is not set';
+  }
+  if (secret === DEV_SECRET || secret === PLACEHOLDER_SECRET) {
+    return 'is a published default';
+  }
+  if (secret.length < AUTH_DEFAULTS.minSecretLength) {
+    return `is shorter than ${AUTH_DEFAULTS.minSecretLength} characters`;
+  }
+  return undefined;
+}
+
+/**
+ * The secret as configured, for preflight to judge.
+ *
+ * @returns `BETTER_AUTH_SECRET`, or undefined when unset.
+ */
+export const configuredAuthSecret = (): string | undefined => process.env.BETTER_AUTH_SECRET;
+
+/**
+ * What better-auth signs with.
+ *
+ * @returns `BETTER_AUTH_SECRET`, or `DEV_SECRET` when unset, so development needs no .env entry.
+ */
+export const authSecret = (): string => configuredAuthSecret() || DEV_SECRET;
+
+/**
+ * Where people open the homepage: where the OIDC sign-in sends the browser back to.
+ *
+ * @returns `APP_URL` without a trailing slash, or this server's own localhost address.
+ */
+export const appUrl = (): string => env('APP_URL').replace(/\/+$/, '') || `http://localhost:${port()}`;
+
+/**
+ * Where a browser reaches this server: where the OIDC sign-in's start and callback live. The same as
+ * `APP_URL` unless the app is served from somewhere else.
+ *
+ * @returns `SERVER_URL` without a trailing slash, or `appUrl()`.
+ */
+export const serverUrl = (): string => env('SERVER_URL').replace(/\/+$/, '') || appUrl();
+
+/** The id the OIDC provider is registered under in better-auth, and so the last part of its callback path. */
+export const OIDC_PROVIDER_ID = 'oidc';
+/** The `OIDC_CLIENT_AUTH` values a provider can expect. */
+export const OIDC_CLIENT_AUTH_METHODS = ['client_secret_basic', 'client_secret_post'] as const;
+
+/** An OIDC provider to sign in with: the environment's, or a pairing's. */
+export interface OidcConfig {
+  issuer: string;
+  clientId: string;
+  /** Absent for a public client. */
+  clientSecret?: string | undefined;
+  clientAuth: (typeof OIDC_CLIENT_AUTH_METHODS)[number];
+  /** What the sign-in button calls it. */
+  name: string;
+}
+
+/**
+ * Reads the OIDC provider set in the environment. Preflight refuses one of `OIDC_ISSUER` and
+ * `OIDC_CLIENT_ID` without the other, and an `OIDC_CLIENT_AUTH` it does not know.
+ *
+ * @returns The provider when `OIDC_ISSUER` and `OIDC_CLIENT_ID` are both set, otherwise null.
+ */
+export function oidcConfig(): OidcConfig | null {
+  const issuer = env('OIDC_ISSUER').replace(/\/+$/, '');
+  const clientId = env('OIDC_CLIENT_ID');
+  const isComplete = issuer !== '' && clientId !== '';
+  if (isComplete === false) {
+    return null;
+  }
+  const clientAuth = env('OIDC_CLIENT_AUTH');
+  const isPost = clientAuth === 'client_secret_post';
+  return {
+    issuer,
+    clientId,
+    clientSecret: env('OIDC_CLIENT_SECRET') || undefined,
+    clientAuth: isPost ? 'client_secret_post' : AUTH_DEFAULTS.oidcClientAuth,
+    name: env('OIDC_NAME') || AUTH_DEFAULTS.oidcName,
+  };
+}
+
+/**
+ * Names the address to register with an OIDC provider as this client's redirect URI.
+ *
+ * @returns better-auth's callback for the provider, under `serverUrl()`.
+ */
+export const oidcRedirectUri = (): string => `${serverUrl()}/api/auth/callback/${OIDC_PROVIDER_ID}`;
+
+/**
+ * The ID token claim groups are read from.
+ *
+ * @returns `OIDC_GROUPS_CLAIM`, or `AUTH_DEFAULTS.oidcGroupsClaim`.
+ */
+export const oidcGroupsClaim = (): string => env('OIDC_GROUPS_CLAIM') || AUTH_DEFAULTS.oidcGroupsClaim;
+
+/**
+ * The proxies whose Remote-User, Remote-Groups and friends are believed, as written.
+ *
+ * @returns The addresses and CIDR ranges in `FORWARD_AUTH_TRUSTED_PROXIES`; empty when forward auth is off.
+ */
+export const forwardAuthTrustedProxies = (): string[] => commaList(env('FORWARD_AUTH_TRUSTED_PROXIES'));
+
+/**
+ * The groups whose members may edit, besides the admin.
+ *
+ * @returns The names in `ADMIN_GROUPS`.
+ */
+export const adminGroups = (): string[] => commaList(env('ADMIN_GROUPS'));
+
+/**
+ * Whether people who are not signed in may see the pages (but not edit them) once sign-in is set up.
+ *
+ * @returns True when `PUBLIC_VIEW` is "true".
+ */
+export const publicView = (): boolean => env('PUBLIC_VIEW') === 'true';
 
 /**
  * Reads the version from package.json, which the Dockerfile copies.

@@ -38,7 +38,8 @@ describe('database page store', () => {
         slug: HOME_SLUG,
         title: 'Home',
         icon: 'house',
-        sections: [{ id: 'main', title: null, collapsed: false, items: [] }],
+        visibleTo: [],
+        sections: [{ id: 'main', title: null, collapsed: false, visibleTo: [], items: [] }],
       },
     ]);
   });
@@ -50,27 +51,33 @@ describe('database page store', () => {
   });
 
   it('creates pages with slugs made from their titles, de-duplicated, at the end of the list', async () => {
-    const media = await store.createPage({ title: 'Média Server!', icon: 'film' });
-    const again = await store.createPage({ title: 'Media server', icon: null });
-    const symbols = await store.createPage({ title: '!!!', icon: null });
+    const media = await store.createPage({ title: 'Média Server!', icon: 'film', visibleTo: [] });
+    const again = await store.createPage({ title: 'Media server', icon: null, visibleTo: [] });
+    const symbols = await store.createPage({ title: '!!!', icon: null, visibleTo: [] });
     expect([media.slug, again.slug, symbols.slug]).toEqual(['media-server', 'media-server-2', 'page']);
     expect(await slugs()).toEqual([HOME_SLUG, 'media-server', 'media-server-2', 'page']);
   });
 
   it('keeps a made slug within the length limit', async () => {
-    const page = await store.createPage({ title: 'a'.repeat(PAGE_LIMIT_DEFAULTS.maxSlugLength + 10), icon: null });
-    const again = await store.createPage({ title: page.title, icon: null });
+    const page = await store.createPage({
+      title: 'a'.repeat(PAGE_LIMIT_DEFAULTS.maxSlugLength + 10),
+      icon: null,
+      visibleTo: [],
+    });
+    const again = await store.createPage({ title: page.title, icon: null, visibleTo: [] });
     expect(page.slug).toHaveLength(PAGE_LIMIT_DEFAULTS.maxSlugLength);
     expect(again.slug).toHaveLength(PAGE_LIMIT_DEFAULTS.maxSlugLength);
     expect(again.slug.endsWith('-2')).toBe(true);
   });
 
   it('refuses a slug that is taken', async () => {
-    await store.createPage({ title: 'Tools', slug: 'tools', icon: null });
-    await expect(store.createPage({ title: 'Other', slug: 'tools', icon: null })).rejects.toMatchObject(badInput);
-    await expect(store.createPage({ title: 'Home again', slug: HOME_SLUG, icon: null })).rejects.toMatchObject(
+    await store.createPage({ title: 'Tools', slug: 'tools', icon: null, visibleTo: [] });
+    await expect(store.createPage({ title: 'Other', slug: 'tools', icon: null, visibleTo: [] })).rejects.toMatchObject(
       badInput,
     );
+    await expect(
+      store.createPage({ title: 'Home again', slug: HOME_SLUG, icon: null, visibleTo: [] }),
+    ).rejects.toMatchObject(badInput);
   });
 
   it('refuses a page past the limit', async () => {
@@ -81,11 +88,13 @@ describe('database page store', () => {
       position: index + 1,
     }));
     await database.db.insert(pages).values(fillers);
-    await expect(store.createPage({ title: 'One too many', icon: null })).rejects.toMatchObject(badInput);
+    await expect(store.createPage({ title: 'One too many', icon: null, visibleTo: [] })).rejects.toMatchObject(
+      badInput,
+    );
   });
 
   it('changes a page title and icon, keeping what was not sent', async () => {
-    await store.createPage({ title: 'Tools', icon: 'terminal' });
+    await store.createPage({ title: 'Tools', icon: 'terminal', visibleTo: [] });
     expect(await store.updatePage('tools', { title: 'Utilities' })).toMatchObject({
       slug: 'tools',
       title: 'Utilities',
@@ -96,9 +105,9 @@ describe('database page store', () => {
   });
 
   it('deletes a page, its sections and its items', async () => {
-    await store.createPage({ title: 'Tools', icon: null });
+    await store.createPage({ title: 'Tools', icon: null, visibleTo: [] });
     await store.addItem('tools', null, linkFields('Router'));
-    await store.createPage({ title: 'Media', icon: null });
+    await store.createPage({ title: 'Media', icon: null, visibleTo: [] });
     await store.deletePage('tools');
     expect(await slugs()).toEqual([HOME_SLUG, 'media']);
     const left = await database.db.select().from(items);
@@ -113,7 +122,7 @@ describe('database page store', () => {
 
   it('moves a page, keeping home first and clamping the place', async () => {
     for (const title of ['A', 'B', 'C']) {
-      await store.createPage({ title, icon: null });
+      await store.createPage({ title, icon: null, visibleTo: [] });
     }
     expect((await store.movePage('c', 1)).map((page) => page.slug)).toEqual([HOME_SLUG, 'c', 'a', 'b']);
     expect((await store.movePage('c', 0)).map((page) => page.slug)).toEqual([HOME_SLUG, 'c', 'a', 'b']);
@@ -156,6 +165,7 @@ describe('database page store', () => {
       frameHeightPx: PAGE_LIMIT_DEFAULTS.defaultFrameHeightPx,
       check: { enabled: false, url: null },
       widget: null,
+      visibleTo: [],
     });
   });
 
@@ -221,9 +231,9 @@ describe('database page store', () => {
     await expect(store.updateItem(HOME_SLUG, 'nope', linkFields('X'))).rejects.toMatchObject(notFound);
     await expect(store.removeItem(HOME_SLUG, 'nope')).rejects.toMatchObject(notFound);
     await expect(store.moveItem(HOME_SLUG, 'nope', null, 0)).rejects.toMatchObject(notFound);
-    await expect(store.updateSection(HOME_SLUG, 'nope', { title: 'X', collapsed: false })).rejects.toMatchObject(
-      notFound,
-    );
+    await expect(
+      store.updateSection(HOME_SLUG, 'nope', { title: 'X', collapsed: false, visibleTo: [] }),
+    ).rejects.toMatchObject(notFound);
     await expect(store.updatePage('nope', { title: 'X' })).rejects.toMatchObject(notFound);
     await expect(store.movePage('nope', 1)).rejects.toMatchObject(notFound);
     expect(await store.find('nope')).toBeNull();
@@ -263,8 +273,8 @@ describe('database page store', () => {
 
   it('adds, renames, folds, moves and removes sections', async () => {
     await store.addItem(HOME_SLUG, null, linkFields('Jellyfin'));
-    await store.addSection(HOME_SLUG, { title: 'Admin', collapsed: false });
-    await store.addSection(HOME_SLUG, { title: 'Admin', collapsed: true });
+    await store.addSection(HOME_SLUG, { title: 'Admin', collapsed: false, visibleTo: [] });
+    await store.addSection(HOME_SLUG, { title: 'Admin', collapsed: true, visibleTo: [] });
     let page = await store.addItem(HOME_SLUG, 'admin', linkFields('Router'));
     expect(page.sections.map((section) => section.id)).toEqual(['main', 'admin', 'admin-2']);
 
@@ -275,7 +285,7 @@ describe('database page store', () => {
       ['jellyfin'],
     ]);
 
-    page = await store.updateSection(HOME_SLUG, 'admin-2', { title: 'Media', collapsed: false });
+    page = await store.updateSection(HOME_SLUG, 'admin-2', { title: 'Media', collapsed: false, visibleTo: [] });
     page = await store.moveSection(HOME_SLUG, 'admin-2', 0);
     expect(page.sections.map((section) => section.title)).toEqual(['Media', null, 'Admin']);
     expect(await store.find(HOME_SLUG)).toEqual(page);
@@ -288,9 +298,11 @@ describe('database page store', () => {
 
   it('refuses a section past the limit', async () => {
     for (let index = 1; index < PAGE_LIMIT_DEFAULTS.maxSectionsPerPage; index += 1) {
-      await store.addSection(HOME_SLUG, { title: `S${index}`, collapsed: false });
+      await store.addSection(HOME_SLUG, { title: `S${index}`, collapsed: false, visibleTo: [] });
     }
-    await expect(store.addSection(HOME_SLUG, { title: 'One more', collapsed: false })).rejects.toMatchObject(badInput);
+    await expect(
+      store.addSection(HOME_SLUG, { title: 'One more', collapsed: false, visibleTo: [] }),
+    ).rejects.toMatchObject(badInput);
   });
 
   it('keeps a stored item kind the schema allows, and nothing else', async () => {

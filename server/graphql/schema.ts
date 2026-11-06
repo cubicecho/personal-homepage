@@ -1,8 +1,13 @@
 import type { GraphQLSchema } from 'graphql';
 import { createSchema } from 'graphql-yoga';
+import { requireEdit, requireView, visiblePage, visiblePages } from '../auth/access.ts';
+import { applyBetterAuthExtension } from '../auth/endpoints.ts';
+import { signIconPath } from '../auth/icon-links.ts';
+import { applyAuthExtension } from '../auth/resolvers.ts';
 import type { Context } from '../core/context.ts';
 import { ICON_DEFAULTS, PAGE_LIMIT_DEFAULTS, type PageLimitSettings } from '../core/defaults.ts';
 import { badInput, notFound } from '../core/errors.ts';
+import type { Database } from '../db/client.ts';
 import type { FrameCheckResult } from '../frames/frame-check.ts';
 import type { IconOption } from '../icons/icon-service.ts';
 import { HOME_SLUG, type Item, itemsOf, type Page, type Section } from '../pages/page.ts';
@@ -16,6 +21,7 @@ import {
 } from '../pages/page-input.ts';
 import { WidgetType } from '../pages/widget.ts';
 import type { SearchEngine } from '../site/site-settings.ts';
+import { applySsoExtension } from '../sso/resolvers.ts';
 import type { ItemStatus } from '../status/status-checker.ts';
 import type { WidgetData, WidgetPreview, WidgetResult } from '../widgets/widget-result.ts';
 import { TYPE_DEFS } from './type-defs.ts';
@@ -59,19 +65,44 @@ interface InputArgs {
 }
 
 /**
- * Loads a page by slug.
+ * Loads a page by slug, as the caller may see it.
  *
  * @param ctx - Request context.
  * @param slug - The page's slug.
- * @returns The page.
- * @throws NOT_FOUND when no page has that slug.
+ * @returns The page, with only the sections and items the caller may see.
+ * @throws UNAUTHENTICATED when the caller may not see the homepage; NOT_FOUND when no page has that slug,
+ * or the caller may not see it.
  */
 async function loadPage(ctx: Context, slug: string): Promise<Page> {
+  requireView(ctx.access);
   const page = await ctx.pages.find(slug);
-  if (page === null) {
+  const visible = page === null ? null : visiblePage(page, ctx.access);
+  if (visible === null) {
     throw notFound(`No page has the slug "${slug}".`);
   }
-  return page;
+  return visible;
+}
+
+/** A resolver that changes something: it is given the context third, as every resolver is. */
+// biome-ignore lint/suspicious/noExplicitAny: the wrapped resolvers' parents and arguments differ.
+type Resolver = (parent: any, args: any, ctx: Context) => unknown;
+
+/**
+ * Makes every resolver of a set refuse a caller who may not edit, before it runs.
+ *
+ * @typeParam T - The resolvers, by field name.
+ * @param fields - The resolvers.
+ * @returns The same resolvers, each checking `requireEdit` first.
+ */
+function editorsOnly<T extends Record<string, Resolver>>(fields: T): T {
+  const guarded = Object.entries(fields).map(([name, resolve]) => [
+    name,
+    (parent: unknown, args: unknown, ctx: Context) => {
+      requireEdit(ctx.access);
+      return resolve(parent, args, ctx);
+    },
+  ]);
+  return Object.fromEntries(guarded) as T;
 }
 
 /**
@@ -97,7 +128,10 @@ const resolvers = {
      * @param ctx - Request context.
      * @returns Every page, home first.
      */
-    pages: (_parent: unknown, _args: unknown, ctx: Context): Promise<Page[]> => ctx.pages.list(),
+    pages: async (_parent: unknown, _args: unknown, ctx: Context): Promise<Page[]> => {
+      requireView(ctx.access);
+      return visiblePages(await ctx.pages.list(), ctx.access);
+    },
     /**
      * Resolves `Query.page`.
      *
@@ -133,6 +167,7 @@ const resolvers = {
      * @throws BAD_USER_INPUT when the URL is not http(s).
      */
     frameCheck: (_parent: unknown, args: { url: string }, ctx: Context): Promise<FrameCheckResult> => {
+      requireView(ctx.access);
       const url = args.url.trim();
       if (isWebUrl(url) === false) {
         throw badInput('Check a full http:// or https:// address.');
@@ -152,6 +187,7 @@ const resolvers = {
       args: { query: string; limit?: number | null },
       ctx: Context,
     ): Promise<IconOption[]> => {
+      requireEdit(ctx.access);
       const { maxSearchResults } = ICON_DEFAULTS;
       const limit = Math.min(maxSearchResults, Math.max(1, args.limit ?? maxSearchResults));
       return ctx.icons.search(args.query.trim(), limit);
@@ -164,8 +200,10 @@ const resolvers = {
      * @param ctx - Request context.
      * @returns The launcher's web searches.
      */
-    searchEngines: (_parent: unknown, _args: unknown, ctx: Context): Promise<SearchEngine[]> =>
-      ctx.site.searchEngines(),
+    searchEngines: (_parent: unknown, _args: unknown, ctx: Context): Promise<SearchEngine[]> => {
+      requireView(ctx.access);
+      return ctx.site.searchEngines();
+    },
     /**
      * Resolves `Query.widgetData`.
      *
@@ -199,8 +237,10 @@ const resolvers = {
      * @returns Its result or failure, and an API widget's raw answer.
      * @throws BAD_USER_INPUT when a setting is out of bounds.
      */
-    widgetPreview: (_parent: unknown, args: InputArgs, ctx: Context): Promise<WidgetPreview> =>
-      ctx.widgets.preview(parseWidget(args.input)),
+    widgetPreview: (_parent: unknown, args: InputArgs, ctx: Context): Promise<WidgetPreview> => {
+      requireEdit(ctx.access);
+      return ctx.widgets.preview(parseWidget(args.input));
+    },
   },
   WidgetResult: {
     /**
@@ -253,8 +293,11 @@ const resolvers = {
      * @param ctx - Request context.
      * @returns Where its icon image is, or null.
      */
-    iconUrl: (item: PlacedItem, _args: unknown, ctx: Context): string | null =>
-      ctx.icons.urlFor(item.icon, { pageSlug: item.pageSlug, itemId: item.id }),
+    iconUrl: (item: PlacedItem, _args: unknown, ctx: Context): string | null => {
+      const url = ctx.icons.urlFor(item.icon, { pageSlug: item.pageSlug, itemId: item.id });
+      // An <img> sends no bearer token, so a favicon the server serves carries proof it was handed out.
+      return url === null ? null : signIconPath(url, ctx.iconLinks);
+    },
     /**
      * Resolves `Item.checkEnabled`.
      *
@@ -270,7 +313,7 @@ const resolvers = {
      */
     checkUrl: (item: Item): string | null => item.check.url,
   },
-  Mutation: {
+  Mutation: editorsOnly({
     /**
      * Resolves `Mutation.setSearchEngines`.
      *
@@ -409,8 +452,17 @@ const resolvers = {
       args: OnPageArgs & MoveArgs & { toSectionId?: string | null },
       ctx: Context,
     ): Promise<Page> => ctx.pages.moveItem(args.pageSlug, args.id, args.toSectionId ?? null, args.toIndex),
-  },
+  }),
 };
 
-/** The schema this server serves. */
-export const schema: GraphQLSchema = createSchema<Context>({ typeDefs: TYPE_DEFS, resolvers });
+/**
+ * Builds the schema this server serves: pages, and signing in.
+ *
+ * @param db - The database. better-auth's fields are described from an instance built over it; nothing is
+ * queried while building.
+ * @returns The schema.
+ */
+export function buildSchema(db: Database): GraphQLSchema {
+  const pagesSchema = createSchema<Context>({ typeDefs: TYPE_DEFS, resolvers });
+  return applySsoExtension(applyAuthExtension(applyBetterAuthExtension(pagesSchema, db)));
+}

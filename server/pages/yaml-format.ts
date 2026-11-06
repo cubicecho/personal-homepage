@@ -54,6 +54,12 @@ const diskIcon = z
     return isIconRef(icon, true) ? icon : null;
   });
 
+/** Who may see a page, section or item, as written: a list of group names, or left out for everyone. */
+const diskGroups = z
+  .array(z.string())
+  .nullish()
+  .transform((groups) => [...new Set((groups ?? []).map((group) => group.trim()).filter((group) => group !== ''))]);
+
 const diskItemSchema = z
   .object({
     id: z.string().trim().nullish(),
@@ -68,6 +74,7 @@ const diskItemSchema = z
       .union([z.boolean(), z.string().trim().refine(isWebUrl, 'check must be true, false or an http(s) address')])
       .nullish(),
     widget: diskWidgetSchema.nullish(),
+    visibleTo: diskGroups,
   })
   .superRefine((item, context) => {
     const isWidget = item.kind === ItemKind.Widget;
@@ -90,6 +97,7 @@ const diskSectionSchema = z.object({
   id: z.string().trim().nullish(),
   title: z.string().trim().nullish(),
   collapsed: z.boolean().nullish(),
+  visibleTo: diskGroups,
   items: z.array(diskItemSchema).nullish(),
 });
 type DiskSection = z.output<typeof diskSectionSchema>;
@@ -97,6 +105,7 @@ type DiskSection = z.output<typeof diskSectionSchema>;
 const diskPageSchema = z.object({
   title: z.string().trim().min(1, 'needs a title'),
   icon: diskIcon,
+  visibleTo: diskGroups,
   items: z.array(diskItemSchema).nullish(),
   sections: z.array(diskSectionSchema).nullish(),
 });
@@ -188,6 +197,7 @@ function itemFromDisk(item: DiskItem, id: string): Item {
     check: { enabled: check !== false, url: isCheckUrl ? check : null },
     // diskItemSchema has already refused a widget that would come back as a sentence.
     widget: typeof widget === 'string' ? null : widget,
+    visibleTo: item.visibleTo,
   };
 }
 
@@ -197,7 +207,7 @@ function itemFromDisk(item: DiskItem, id: string): Item {
  * @returns The section, with no items.
  */
 export function emptySection(): Section {
-  return { id: MAIN_SECTION_ID, title: null, collapsed: false, items: [] };
+  return { id: MAIN_SECTION_ID, title: null, collapsed: false, visibleTo: [], items: [] };
 }
 
 /**
@@ -216,7 +226,13 @@ function sectionsFromDisk(sections: DiskSection[]): Section[] {
     const items = (section.items ?? []).map((item) =>
       itemFromDisk(item, claimId(item.id, item.title, FALLBACK_ITEM_ID, itemIds)),
     );
-    return { id, title: hasTitle ? title : null, collapsed: section.collapsed ?? false, items };
+    return {
+      id,
+      title: hasTitle ? title : null,
+      collapsed: section.collapsed ?? false,
+      visibleTo: section.visibleTo,
+      items,
+    };
   });
   const isEmpty = read.length === 0;
   return isEmpty ? [emptySection()] : read;
@@ -259,6 +275,9 @@ function itemToDisk(item: Item): Record<string, unknown> {
   if (item.widget !== null) {
     written.widget = widgetToDisk(item.widget);
   }
+  if (item.visibleTo.length > 0) {
+    written.visibleTo = item.visibleTo;
+  }
   return written;
 }
 
@@ -274,9 +293,16 @@ export function pageToDisk(page: Page): Record<string, unknown> {
   if (page.icon !== null) {
     written.icon = page.icon;
   }
+  if (page.visibleTo.length > 0) {
+    written.visibleTo = page.visibleTo;
+  }
   const [first] = page.sections;
   const isPlain =
-    page.sections.length === 1 && first !== undefined && first.title === null && first.collapsed === false;
+    page.sections.length === 1 &&
+    first !== undefined &&
+    first.title === null &&
+    first.collapsed === false &&
+    first.visibleTo.length === 0;
   if (isPlain) {
     written.items = first.items.map(itemToDisk);
     return written;
@@ -288,6 +314,9 @@ export function pageToDisk(page: Page): Record<string, unknown> {
     }
     if (section.collapsed) {
       disk.collapsed = true;
+    }
+    if (section.visibleTo.length > 0) {
+      disk.visibleTo = section.visibleTo;
     }
     disk.items = section.items.map(itemToDisk);
     return disk;
@@ -371,9 +400,9 @@ function parsePage(slug: string, text: string): { page: Page } | { problem: stri
   if (result.success === false) {
     return { problem: describeIssues(result.error) };
   }
-  const { title, icon, items, sections } = result.data;
-  const diskSections = sections ?? [{ items: items ?? [] }];
-  return { page: { slug, title, icon, sections: sectionsFromDisk(diskSections) } };
+  const { title, icon, visibleTo, items, sections } = result.data;
+  const diskSections = sections ?? [{ items: items ?? [], visibleTo: [] }];
+  return { page: { slug, title, icon, visibleTo, sections: sectionsFromDisk(diskSections) } };
 }
 
 /**

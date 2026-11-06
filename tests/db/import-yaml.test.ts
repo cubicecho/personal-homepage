@@ -183,12 +183,14 @@ describe('importing YAML pages', () => {
     await writeFiles(OLD_FILES);
     expect(await importYamlOnBoot(database.db, dir, log)).toBe(0);
     expect(log.warn).toHaveBeenCalledWith(expect.stringContaining('--replace'));
-    expect(itemsOf((await store.find(HOME_SLUG)) ?? { slug: '', title: '', icon: null, sections: [] })).toHaveLength(1);
+    expect(
+      itemsOf((await store.find(HOME_SLUG)) ?? { slug: '', title: '', icon: null, visibleTo: [], sections: [] }),
+    ).toHaveLength(1);
     expect(await readdir(path.join(dir, 'pages'))).toContain('media.yaml');
   });
 
   it('refuses a manual import over pages unless told to replace them', async () => {
-    await store.createPage({ title: 'Mine', icon: null });
+    await store.createPage({ title: 'Mine', icon: null, visibleTo: [] });
     await writeFiles(OLD_FILES);
     const data = await readYamlData(dir);
     await expect(importYamlData(database.db, data, { replace: false })).rejects.toThrow(/--replace/);

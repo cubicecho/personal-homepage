@@ -4,6 +4,8 @@
 import { promisify } from 'node:util';
 import type { Express, Request, Response } from 'express';
 import { type AsyncZippable, strToU8, zip } from 'fflate';
+import { type Access, visiblePages } from '../auth/access.ts';
+import { HttpStatus } from '../core/wire.ts';
 import type { PageStore } from '../pages/page.ts';
 import { toYamlFiles } from '../pages/yaml-format.ts';
 import type { SiteSettings } from '../site/site-settings.ts';
@@ -27,8 +29,9 @@ export interface ExportSource {
  * @param source - Where pages and settings are kept.
  * @returns The files, by path inside the zip.
  */
-export async function exportFiles(source: ExportSource): Promise<Record<string, Uint8Array>> {
-  const files = toYamlFiles(await source.pages.list(), await source.site.storedSearch());
+export async function exportFiles(source: ExportSource, access: Access): Promise<Record<string, Uint8Array>> {
+  const pages = visiblePages(await source.pages.list(), access);
+  const files = toYamlFiles(pages, await source.site.storedSearch());
   return Object.fromEntries(Object.entries(files).map(([name, text]) => [name, strToU8(text)]));
 }
 
@@ -50,9 +53,19 @@ export function exportFilename(date: Date): string {
  * @param source - Where pages and settings are kept.
  * @param [now] - The clock, for the file's name. Default: the real one.
  */
-export function mountExport(app: Express, source: ExportSource, now: () => Date = () => new Date()): void {
-  app.get(EXPORT_PATH, async (_req: Request, res: Response) => {
-    const files: AsyncZippable = await exportFiles(source);
+export function mountExport(
+  app: Express,
+  source: ExportSource,
+  accessFor: (req: Request) => Promise<Access>,
+  now: () => Date = () => new Date(),
+): void {
+  app.get(EXPORT_PATH, async (req: Request, res: Response) => {
+    const access = await accessFor(req);
+    if (access.canView === false) {
+      res.status(HttpStatus.Unauthorized).type('text/plain').send('Sign in to download the pages.');
+      return;
+    }
+    const files: AsyncZippable = await exportFiles(source, access);
     const archive = await zipAsync(files);
     res
       .type('application/zip')

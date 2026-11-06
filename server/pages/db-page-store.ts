@@ -85,6 +85,7 @@ function itemFromRow(row: ItemRow): Item {
     frameHeightPx: row.frameHeightPx,
     check: { enabled: row.checkEnabled, url: row.checkUrl },
     widget: widgetFromRow(row),
+    visibleTo: row.visibleTo,
   };
 }
 
@@ -109,6 +110,7 @@ function assemble(pageRows: PageRow[], sectionRows: SectionRow[], itemRows: Item
         id: section.id,
         title: section.title,
         collapsed: section.collapsed,
+        visibleTo: section.visibleTo,
         items: itemsBySection.get(`${page.slug}/${section.id}`) ?? [],
       }));
     const hasSections = pageSections.length > 0;
@@ -116,6 +118,7 @@ function assemble(pageRows: PageRow[], sectionRows: SectionRow[], itemRows: Item
       slug: page.slug,
       title: page.title,
       icon: page.icon,
+      visibleTo: page.visibleTo,
       sections: hasSections ? pageSections : [emptySection()],
     };
   });
@@ -197,7 +200,10 @@ async function loadPage(tx: Transaction, slug: string): Promise<Page> {
  * @returns The same page.
  */
 export async function writePage(tx: Transaction, page: Page): Promise<Page> {
-  await tx.update(pages).set({ title: page.title, icon: page.icon }).where(eq(pages.slug, page.slug));
+  await tx
+    .update(pages)
+    .set({ title: page.title, icon: page.icon, visibleTo: page.visibleTo })
+    .where(eq(pages.slug, page.slug));
   // Items go with their sections (fk_items_section cascades).
   await tx.delete(sections).where(eq(sections.pageSlug, page.slug));
   const sectionRows = page.sections.map((section, position) => ({
@@ -205,6 +211,7 @@ export async function writePage(tx: Transaction, page: Page): Promise<Page> {
     id: section.id,
     title: section.title,
     collapsed: section.collapsed,
+    visibleTo: section.visibleTo,
     position,
   }));
   await tx.insert(sections).values(sectionRows);
@@ -224,6 +231,7 @@ export async function writePage(tx: Transaction, page: Page): Promise<Page> {
       checkUrl: item.check.url,
       // The YAML mapping, secret references as written: never a resolved value.
       widget: item.widget === null ? null : widgetToDisk(item.widget),
+      visibleTo: item.visibleTo,
     })),
   );
   if (itemRows.length > 0) {
@@ -241,7 +249,9 @@ export async function writePage(tx: Transaction, page: Page): Promise<Page> {
  * @returns The same page.
  */
 export async function insertPage(tx: Transaction, page: Page, position: number): Promise<Page> {
-  await tx.insert(pages).values({ slug: page.slug, title: page.title, icon: page.icon, position });
+  await tx
+    .insert(pages)
+    .values({ slug: page.slug, title: page.title, icon: page.icon, visibleTo: page.visibleTo, position });
   return writePage(tx, page);
 }
 
@@ -282,7 +292,11 @@ export async function ensureHome(db: Database): Promise<void> {
   await exclusive(db, async (tx) => {
     const existing = await tx.select({ slug: pages.slug }).from(pages).where(eq(pages.slug, HOME_SLUG));
     if (existing.length === 0) {
-      await insertPage(tx, { slug: HOME_SLUG, title: 'Home', icon: HOME_ICON, sections: [emptySection()] }, 0);
+      await insertPage(
+        tx,
+        { slug: HOME_SLUG, title: 'Home', icon: HOME_ICON, visibleTo: [], sections: [emptySection()] },
+        0,
+      );
     }
   });
 }
@@ -330,7 +344,13 @@ export async function createDbPageStore(db: Database): Promise<PageStore> {
         const slug = wanted ?? uniqueSlug(slugFrom(newPage.title, FALLBACK_PAGE_SLUG), taken);
         const [last] = await tx.select({ position: max(pages.position) }).from(pages);
         const position = (last?.position ?? 0) + 1;
-        const page: Page = { slug, title: newPage.title, icon: newPage.icon, sections: [emptySection()] };
+        const page: Page = {
+          slug,
+          title: newPage.title,
+          icon: newPage.icon,
+          visibleTo: newPage.visibleTo,
+          sections: [emptySection()],
+        };
         return insertPage(tx, page, position);
       }),
 
