@@ -20,6 +20,7 @@ import {
   DIALOG_TITLE_CLASS,
 } from "@/components/ui/dialog-base";
 import { X } from "@/components/ui/icons";
+import { FrameFocusGuard } from "@/lib/frame-focus-guard";
 import { bridgePress, cn } from "@/lib/utils";
 
 /** The shared contract, widened to what the radix part (or element) underneath accepts. */
@@ -134,6 +135,8 @@ function DialogContent({
         )}
       >
         {children}
+        {/* A framed app focusing itself would take the focus, and the typing, out of the dialog. */}
+        <FrameFocusGuard />
         {showCloseButton ? (
           <DialogPrimitive.Close
             data-slot="dialog-close"
