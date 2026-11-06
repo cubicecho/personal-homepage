@@ -226,6 +226,10 @@ Apps are found in three places:
   [web manifest](https://developer.mozilla.org/docs/Web/Manifest) for the name, description and icon, which most
   self-hosted apps ship so they can be installed on a phone.
 - Without a manifest, it uses the page's title, description and icon links, and then its favicon.
+- **Icons:** when the app's name matches an icon in dashboard-icons or selfh.st, that icon is chosen over the
+  page's own. The name comes from its page, its container, or its image (`lscr.io/linuxserver/jellyfin` →
+  `di:jellyfin`), and the match must be exact, ignoring case, spaces and hyphens. Order: a `homepage.icon` label, then
+  a catalogue match, then the page's icon, then the favicon. **Fill in** matches the same way.
 - **Rescan** on the page asks every source again. Otherwise Dockhand and the socket are asked every 5 minutes,
   and mDNS is watched all the time.
 

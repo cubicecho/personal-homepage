@@ -11,6 +11,7 @@ import {
   dockhandUrl,
 } from '../core/config.ts';
 import type { Database } from '../db/client.ts';
+import type { IconService } from '../icons/icon-service.ts';
 import { type DiscoverySource, DiscoverySourceName } from './candidate.ts';
 import { createDescriber } from './describe.ts';
 import { createDockerSocketSource } from './docker-socket.ts';
@@ -38,9 +39,10 @@ function canUseSocket(path: string): boolean {
  * Builds discovery with the sources the environment sets up.
  *
  * @param db - The database, migrated.
+ * @param icons - The icon service, whose catalogues a found app's name is matched against.
  * @returns The service, not yet started.
  */
-export function createConfiguredDiscovery(db: Database): DiscoveryService {
+export function createConfiguredDiscovery(db: Database, icons: IconService): DiscoveryService {
   const sources: DiscoverySource[] = [];
   const disabled: DisabledSource[] = [];
 
@@ -82,5 +84,6 @@ export function createConfiguredDiscovery(db: Database): DiscoveryService {
     describer: createDescriber(),
     sources,
     disabled,
+    matchIcon: (names) => icons.matchName(names),
   });
 }

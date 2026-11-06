@@ -20,6 +20,7 @@ import { waitForDatabase } from './db/wait.ts';
 import { createConfiguredDiscovery } from './discovery/setup.ts';
 import { createApp, WEB_DIST } from './http/app.ts';
 import { stopOnSignals } from './http/shutdown.ts';
+import { createIconService } from './icons/icon-service.ts';
 import { createDbPageStore } from './pages/db-page-store.ts';
 import { createSiteSettings } from './site/site-settings.ts';
 
@@ -90,7 +91,9 @@ const site = createSiteSettings(db);
 // Built after migrate: it reads the OIDC pairing from the database.
 const secret = resolveAuthSecret(dataDir());
 const authHost = await createAuthHost(db, { secret });
-const discovery = createConfiguredDiscovery(db);
+// One icon service for the API and discovery, so the catalogue listings are downloaded once.
+const icons = createIconService({ dataDir: dataDir() });
+const discovery = createConfiguredDiscovery(db, icons);
 
 const server = createApp({
   pages,
@@ -98,6 +101,7 @@ const server = createApp({
   db,
   authHost,
   discovery,
+  icons,
   authSecret: secret,
   dataDir: dataDir(),
   dist: WEB_DIST,

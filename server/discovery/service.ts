@@ -6,6 +6,8 @@
 import { DISCOVERY_DEFAULTS, type DiscoverySettings } from '../core/defaults.ts';
 import { errorMessage } from '../core/errors.ts';
 import { MS_PER_SECOND, SECONDS_PER_MINUTE } from '../core/wire.ts';
+import type { IconRef } from '../pages/page.ts';
+import { FAVICON_ICON } from '../pages/page-input.ts';
 import type { Candidate, DiscoverySource, DiscoverySourceName } from './candidate.ts';
 import type { Describer, Description } from './describe.ts';
 import type { DiscoveredApp, DiscoveryStore } from './store.ts';
@@ -83,9 +85,57 @@ export interface DiscoveryService {
    * Describes an address someone typed, for "Fill in".
    *
    * @param url - The address.
-   * @returns What its page says.
+   * @returns What its page says, with a catalogue icon its name matches in place of the page's own.
    */
   describe(url: string): Promise<Description>;
+}
+
+/** Where a found app's icon came from, kept in its metadata as `iconSource`. */
+export const IconOrigin = {
+  /** A Homepage-style `homepage.icon` label. */
+  Label: 'label',
+  /** A catalogue icon its name matched (the icon service's `matchName`). */
+  Catalogue: 'catalogue',
+  /** Its web manifest or its page's icon links. */
+  Page: 'page',
+  /** Its site's favicon, fetched by the server. */
+  Favicon: 'favicon',
+  /** Nothing usable. */
+  None: 'none',
+} as const;
+export type IconOrigin = (typeof IconOrigin)[keyof typeof IconOrigin];
+
+/**
+ * Finds the catalogue icon an app's names point to.
+ *
+ * @param names - The app's names, most telling first.
+ * @returns A `di:` or `sh:` reference, or null.
+ */
+export type IconMatcher = (names: readonly string[]) => Promise<IconRef | null>;
+
+/**
+ * Picks an app's icon: what it says about itself, then a catalogue icon its name matches, then its page's.
+ *
+ * @param labelled - The icon a label gave, if any.
+ * @param matched - The catalogue icon its names matched, if any.
+ * @param described - The icon its page gave: an image address, `favicon`, or null.
+ * @returns The icon and where it came from.
+ */
+export function chooseIcon(
+  labelled: IconRef | null,
+  matched: IconRef | null,
+  described: IconRef | null,
+): { icon: IconRef | null; iconSource: IconOrigin } {
+  if (labelled !== null) {
+    return { icon: labelled, iconSource: IconOrigin.Label };
+  }
+  if (matched !== null) {
+    return { icon: matched, iconSource: IconOrigin.Catalogue };
+  }
+  if (described === null) {
+    return { icon: null, iconSource: IconOrigin.None };
+  }
+  return { icon: described, iconSource: described === FAVICON_ICON ? IconOrigin.Favicon : IconOrigin.Page };
 }
 
 /** What the service is built from; tests pass fakes. */
@@ -96,6 +146,8 @@ export interface DiscoveryServiceDeps {
   sources: DiscoverySource[];
   /** The ones that aren't, so the web app can say how to set them up. */
   disabled?: DisabledSource[];
+  /** Matches an app's names to a catalogue icon. Left out, apps keep their page's icon. */
+  matchIcon?: IconMatcher;
   now?: () => Date;
   warn?: (message: string) => void;
 }
@@ -141,6 +193,7 @@ export function createDiscoveryService(
   const { pollMinutes, mdnsSettleSeconds, describeConcurrency } = { ...DISCOVERY_DEFAULTS, ...overrides };
   const now = deps.now ?? (() => new Date());
   const warn = deps.warn ?? ((message: string) => console.warn(message));
+  const matchIcon: IconMatcher = deps.matchIcon ?? (async () => null);
   const statuses = new Map<DiscoverySourceName, SourceStatus>(
     deps.sources.map((source) => [
       source.name,
@@ -170,14 +223,19 @@ export function createDiscoveryService(
   const describeCandidate = async (candidate: Candidate) => {
     const describedFrom = candidate.probeUrl ?? candidate.url;
     const described = await deps.describer.describe(describedFrom, { requirePrivate: true });
+    const { explicit } = candidate;
+    const names = [explicit.name, ...described.names, candidate.fallbackName, ...candidate.nameHints];
+    // A label's icon wins, so its catalogues aren't asked.
+    const matched = explicit.icon === null ? await matchIcon(names.filter((name) => name !== null)) : null;
+    const { icon, iconSource } = chooseIcon(explicit.icon, matched, described.icon);
     return {
       source: candidate.source,
       sourceKey: candidate.sourceKey,
-      name: candidate.explicit.name ?? described.title ?? candidate.fallbackName,
+      name: explicit.name ?? described.title ?? candidate.fallbackName,
       url: candidate.url,
-      description: candidate.explicit.description ?? described.description,
-      icon: candidate.explicit.icon ?? described.icon,
-      metadata: { ...candidate.metadata, describedFrom, describeProblem: described.problem },
+      description: explicit.description ?? described.description,
+      icon,
+      metadata: { ...candidate.metadata, describedFrom, describeProblem: described.problem, iconSource },
     };
   };
 
@@ -287,6 +345,10 @@ export function createDiscoveryService(
     find: (id) => deps.store.find(id),
     setDismissed: (id, dismissed) => deps.store.setDismissed(id, dismissed),
     statuses: () => [...statuses.values()],
-    describe: (url) => deps.describer.describe(url, { requirePrivate: false }),
+    describe: async (url) => {
+      const described = await deps.describer.describe(url, { requirePrivate: false });
+      const matched = await matchIcon(described.names);
+      return { ...described, icon: chooseIcon(null, matched, described.icon).icon };
+    },
   };
 }

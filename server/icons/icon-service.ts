@@ -6,11 +6,12 @@
 // A favicon is fetched and served by this server (favicons.ts, http.ts).
 import path from 'node:path';
 import { BUILT_IN_ICONS, type IconRef } from '../pages/page.ts';
-import { CATALOGUE_ICON_PATTERN, FAVICON_ICON, isWebUrl } from '../pages/page-input.ts';
+import { CATALOGUE_ICON_PATTERN, FAVICON_ICON, isIconRef, isWebUrl } from '../pages/page-input.ts';
 import {
   type Catalogue,
   type CatalogueIcon,
   DASHBOARD_ICONS,
+  DASHBOARD_ICONS_METADATA,
   type IconFormat,
   labelFromName,
   openCatalogue,
@@ -18,6 +19,7 @@ import {
 } from './catalogues.ts';
 import type { Clock, Fetch } from './fetching.ts';
 import { faviconPath } from './http.ts';
+import { indexIcons, type MatchIndexes, matchIcon } from './icon-match.ts';
 
 /** Where an icon in a search result comes from. */
 export const IconSource = { Glyph: 'GLYPH', DashboardIcons: 'DASHBOARD_ICONS', Selfhst: 'SELFHST' } as const;
@@ -56,6 +58,14 @@ export interface IconService {
    * @returns The matches, glyphs first.
    */
   search(query: string, limit: number): Promise<IconOption[]>;
+  /**
+   * Finds the catalogue icon an app's names point to (icon-match.ts).
+   *
+   * @param names - The app's names, most telling first.
+   * @returns `di:<name>` or `sh:<name>` for an exact match, or null for none, or when the catalogues
+   * can't be read. Never throws.
+   */
+  matchName(names: readonly string[]): Promise<IconRef | null>;
 }
 
 /** What the icon service is built from. */
@@ -151,6 +161,36 @@ export function createIconService(options: IconServiceOptions): IconService {
     di: openCatalogue(DASHBOARD_ICONS, deps),
     sh: openCatalogue(SELFHST, deps),
   };
+  // Only matching reads it: dashboard-icons' other names for its icons.
+  const dashboardIconAliases = openCatalogue(DASHBOARD_ICONS_METADATA, deps);
+  /** The match indexes, rebuilt only when a listing they came from changes. */
+  let indexed: { from: readonly ReadonlyMap<string, CatalogueIcon>[]; indexes: MatchIndexes } | null = null;
+
+  /**
+   * Gives the match indexes for the listings as they are now.
+   *
+   * @param di - dashboard-icons' icons.
+   * @param aliases - dashboard-icons' other names.
+   * @param sh - selfh.st's icons.
+   * @returns The indexes.
+   */
+  const indexesFor = (
+    di: ReadonlyMap<string, CatalogueIcon>,
+    aliases: ReadonlyMap<string, CatalogueIcon>,
+    sh: ReadonlyMap<string, CatalogueIcon>,
+  ): MatchIndexes => {
+    const from = [di, aliases, sh];
+    const isCurrent = indexed?.from.every((listing, at) => listing === from[at]) === true;
+    if (isCurrent && indexed !== null) {
+      return indexed.indexes;
+    }
+    const indexes: MatchIndexes = {
+      di: indexIcons(di.values(), aliases.values()),
+      sh: indexIcons(sh.values()),
+    };
+    indexed = { from, indexes };
+    return indexes;
+  };
   const sources: Record<'di' | 'sh', IconSource> = { di: IconSource.DashboardIcons, sh: IconSource.Selfhst };
 
   /**
@@ -235,6 +275,17 @@ export function createIconService(options: IconServiceOptions): IconService {
       // Both catalogues' best matches before either's weaker ones. At a tie, `di:` sorts before `sh:`.
       const merged = byRank(fromCatalogues.flat());
       return [...glyphs, ...merged].slice(0, limit).map((ranked) => ranked.option);
+    },
+
+    matchName: async (names) => {
+      // Each load never throws: a listing that can't be fetched is the last one known, or empty.
+      const [di, aliases, sh] = await Promise.all([
+        catalogues.di.load(),
+        dashboardIconAliases.load(),
+        catalogues.sh.load(),
+      ]);
+      const icon = matchIcon(names, indexesFor(di, aliases, sh));
+      return icon !== null && isIconRef(icon, false) ? icon : null;
     },
   };
 }

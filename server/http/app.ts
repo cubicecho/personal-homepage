@@ -93,6 +93,7 @@ export function createApp({
 }: AppDeps): Express {
   const forwardAuth: ForwardAuth = deps.forwardAuth ?? createForwardAuth(forwardAuthTrustedProxies());
   const limiter: RateLimiter = deps.limiter ?? createRateLimiter();
+  const icons = deps.icons ?? createIconService({ dataDir });
   const services: Services = {
     pages: deps.pages,
     site: deps.site,
@@ -102,12 +103,17 @@ export function createApp({
     limiter,
     status: deps.status ?? createStatusChecker(),
     frames: deps.frames ?? createFrameChecker(),
-    icons: deps.icons ?? createIconService({ dataDir }),
+    icons,
     widgets: deps.widgets ?? createWidgetService({ weatherApiUrl: weatherApiUrl() }, { dataDir }),
     // With no sources it only keeps what is recorded; boot passes the one the environment sets up.
     discovery:
       deps.discovery ??
-      createDiscoveryService({ store: createDiscoveryStore(deps.db), describer: createDescriber(), sources: [] }),
+      createDiscoveryService({
+        store: createDiscoveryStore(deps.db),
+        describer: createDescriber(),
+        sources: [],
+        matchIcon: (names) => icons.matchName(names),
+      }),
   };
   const iconLinks = (): IconLinks => ({
     isRequired: authModeOf(services) === AuthMode.SignIn,

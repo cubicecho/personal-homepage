@@ -34,6 +34,11 @@ export interface Candidate {
   probeUrl: string | null;
   /** What the source calls it, used when neither the labels nor the page say better. */
   fallbackName: string;
+  /**
+   * Other names the app goes by, most telling first, for finding its icon in a catalogue: a container's
+   * name and its image's names, or an app's own mDNS service type. Never shown.
+   */
+  nameHints: string[];
   explicit: ExplicitDetails;
   /** What the source said, kept for working out why an app looks as it does. Never a password. */
   metadata: Record<string, unknown>;
