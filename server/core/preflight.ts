@@ -8,6 +8,9 @@ import {
   databaseUrlProblem,
   dataDir,
   describeWeakSecret,
+  dockhandProblem,
+  dockhandToken,
+  dockhandUrl,
   forwardAuthTrustedProxies,
   isProduction,
   OIDC_CLIENT_AUTH_METHODS,
@@ -28,6 +31,11 @@ function fatal(message: string): never {
 const urlProblem = databaseUrlProblem(databaseUrl());
 if (urlProblem !== null) {
   fatal(urlProblem);
+}
+
+const discoveryProblem = dockhandProblem(dockhandUrl(), dockhandToken());
+if (discoveryProblem !== null) {
+  fatal(discoveryProblem);
 }
 
 const signInProblem = signInConfigProblem();

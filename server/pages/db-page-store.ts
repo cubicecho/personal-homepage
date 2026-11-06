@@ -3,13 +3,13 @@
 // write shares, so two changes never interleave, then reads the page, applies the rule from
 // page-edits.ts, and writes the page's sections and items back whole, renumbered. That is a few dozen
 // rows at most, and it keeps one code path for every change.
-import { asc, eq, max, ne, sql } from 'drizzle-orm';
+import { asc, eq, inArray, max, ne, sql } from 'drizzle-orm';
 import type { PgAsyncTransaction, PgQueryResultHKT } from 'drizzle-orm/pg-core';
 import { PAGE_LIMIT_DEFAULTS } from '../core/defaults.ts';
 import { badInput, notFound } from '../core/errors.ts';
 import type { Database } from '../db/client.ts';
-import { type ItemRow, items, type PageRow, pages, type SectionRow, sections } from '../db/schema.ts';
-import { HOME_SLUG, type Item, ItemKind, OpensIn, type Page, type PageStore } from './page.ts';
+import { discoveredApps, type ItemRow, items, type PageRow, pages, type SectionRow, sections } from '../db/schema.ts';
+import { HOME_SLUG, type Item, ItemKind, itemsOf, OpensIn, type Page, type PageStore } from './page.ts';
 import * as edits from './page-edits.ts';
 import { describeIssues, SLUG_PATTERN } from './page-input.ts';
 import { slugFrom, uniqueSlug } from './slug.ts';
@@ -86,6 +86,7 @@ function itemFromRow(row: ItemRow): Item {
     check: { enabled: row.checkEnabled, url: row.checkUrl },
     widget: widgetFromRow(row),
     visibleTo: row.visibleTo,
+    discoveredId: row.discoveredId,
   };
 }
 
@@ -193,6 +194,25 @@ async function loadPage(tx: Transaction, slug: string): Promise<Page> {
 }
 
 /**
+ * Finds which of the discovered apps some items link to still exist.
+ *
+ * @param tx - The transaction.
+ * @param pageItems - The items about to be written.
+ * @returns The ids that exist.
+ */
+async function existingDiscoveredIds(tx: Transaction, pageItems: Item[]): Promise<Set<string>> {
+  const linked = [...new Set(pageItems.flatMap((item) => (item.discoveredId === null ? [] : [item.discoveredId])))];
+  if (linked.length === 0) {
+    return new Set();
+  }
+  const rows = await tx
+    .select({ id: discoveredApps.id })
+    .from(discoveredApps)
+    .where(inArray(discoveredApps.id, linked));
+  return new Set(rows.map((row) => row.id));
+}
+
+/**
  * Writes a page's title, icon, sections and items, replacing what was there.
  *
  * @param tx - The transaction.
@@ -215,6 +235,7 @@ export async function writePage(tx: Transaction, page: Page): Promise<Page> {
     position,
   }));
   await tx.insert(sections).values(sectionRows);
+  const linkable = await existingDiscoveredIds(tx, itemsOf(page));
   const itemRows = page.sections.flatMap((section) =>
     section.items.map((item) => ({
       pageSlug: page.slug,
@@ -232,6 +253,8 @@ export async function writePage(tx: Transaction, page: Page): Promise<Page> {
       // The YAML mapping, secret references as written: never a resolved value.
       widget: item.widget === null ? null : widgetToDisk(item.widget),
       visibleTo: item.visibleTo,
+      // A link to a discovered app deleted since is dropped, as the foreign key does on delete.
+      discoveredId: item.discoveredId !== null && linkable.has(item.discoveredId) ? item.discoveredId : null,
     })),
   );
   if (itemRows.length > 0) {

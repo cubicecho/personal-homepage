@@ -1,0 +1,66 @@
+fragment DiscoveredAppFields on DiscoveredApp {
+  id
+  source
+  name
+  url
+  description
+  icon
+  iconUrl
+  firstSeenAt
+  lastSeenAt
+  dismissed
+  addedTo {
+    pageSlug
+    pageTitle
+    itemId
+    itemTitle
+  }
+}
+
+fragment DiscoverySourceFields on DiscoverySourceStatus {
+  source
+  isEnabled
+  setupHint
+  lastScanAt
+  found
+  error
+}
+
+query DiscoveredApps($includeDismissed: Boolean) {
+  discoveredApps(includeDismissed: $includeDismissed) {
+    ...DiscoveredAppFields
+  }
+}
+
+query DiscoverySources {
+  discoverySources {
+    ...DiscoverySourceFields
+  }
+}
+
+query DescribeUrl($url: String!) {
+  describeUrl(url: $url) {
+    url
+    title
+    description
+    icon
+    iconUrl
+    problem
+  }
+}
+
+mutation RescanDiscovery {
+  rescanDiscovery {
+    found
+    added
+    sources {
+      ...DiscoverySourceFields
+    }
+  }
+}
+
+mutation DismissDiscoveredApp($id: ID!, $dismissed: Boolean!) {
+  dismissDiscoveredApp(id: $id, dismissed: $dismissed) {
+    ...DiscoveredAppFields
+  }
+}

@@ -22,6 +22,9 @@ export {
   LayoutGrid,
   Link,
   PanelsTopLeft,
+  Radar,
+  RefreshCw,
   Rss,
   Trash2,
+  Wand,
 } from 'lucide-react';

@@ -16,6 +16,9 @@ import { RadioGroupField, type RadioOption } from '@/components/radio-group-fiel
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { FormElement } from '@/components/ui/form-element';
+import { DiscoveredAppPicker } from '@/discovery/discovered-app-picker';
+import { FillInButton } from '@/discovery/fill-in-button';
+import { LinkedAppNote } from '@/discovery/linked-app-note';
 import { FrameCheckNotice } from '@/frames/frame-check-notice';
 import { messageOf } from '@/lib/error-message';
 import { checkWidget, toWidgetInput, type WidgetDraft, widgetDraftOf } from '@/widgets/widget-draft';
@@ -34,6 +37,18 @@ interface ItemDialogProps {
   item?: Item | undefined;
   /** The section a new item goes in, when the page has several. Left out, the first. */
   sectionId?: string | undefined;
+  /** Details a new item starts with, such as a discovered app's, linked to it. Ignored when editing. */
+  prefill?: ItemPrefill | undefined;
+}
+
+/** Details a new item starts with. */
+export interface ItemPrefill {
+  title: string;
+  url: string;
+  icon: string | null;
+  description: string | null;
+  /** The discovered app it comes from, or null. */
+  discoveredId: string | null;
 }
 
 /** What the form holds. */
@@ -53,6 +68,8 @@ interface ItemDraft {
   widget: WidgetDraft;
   /** The groups that may see it; empty for everyone. */
   visibleTo: string[];
+  /** The discovered app it comes from, or null. */
+  discoveredId: string | null;
 }
 
 const KIND_OPTIONS: readonly RadioOption[] = Object.entries(ITEM_KINDS).map(([kind, { Glyph, label, summary }]) => ({
@@ -97,11 +114,12 @@ function toInput(draft: ItemDraft): ItemInput {
     checkUrl: draft.checkUrl.trim(),
     widget: isWidget ? toWidgetInput(draft.widget) : null,
     visibleTo: draft.visibleTo,
+    discoveredId: draft.discoveredId,
   };
 }
 
 /** Adds an item to a page, or changes one. */
-export function ItemDialog({ open, onOpenChange, page, item, sectionId }: ItemDialogProps) {
+export function ItemDialog({ open, onOpenChange, page, item, sectionId, prefill }: ItemDialogProps) {
   const limits = usePageLimits().data;
   const addItem = useAddItem();
   const updateItem = useUpdateItem();
@@ -116,16 +134,39 @@ export function ItemDialog({ open, onOpenChange, page, item, sectionId }: ItemDi
   const defaultValues: ItemDraft = {
     kind: item?.kind ?? 'LINK',
     opensIn: item?.opensIn ?? 'NEW_TAB',
-    title: item?.title ?? '',
-    url: item?.url ?? '',
-    icon: item?.icon ?? null,
-    description: item?.description ?? '',
+    title: item?.title ?? prefill?.title ?? '',
+    url: item?.url ?? prefill?.url ?? '',
+    icon: item?.icon ?? prefill?.icon ?? null,
+    description: item?.description ?? prefill?.description ?? '',
     frameHeightPx: item?.frameHeightPx ?? null,
     sectionId: sectionId ?? page.sections[0]?.id ?? '',
     checkEnabled: item?.checkEnabled ?? true,
     checkUrl: item?.checkUrl ?? '',
     widget: widgetDraftOf(item?.widget ?? null),
     visibleTo: item?.visibleTo ?? [],
+    discoveredId: isEdit ? item.discoveredId : (prefill?.discoveredId ?? null),
+  };
+
+  /**
+   * Fills the fields that are still empty from what a page says, keeping whatever was typed.
+   *
+   * @param found - The page's title, description and icon.
+   * @param found.title - Its name, if it gave one.
+   * @param found.description - Its description, if it gave one.
+   * @param found.icon - Its icon reference, if any.
+   */
+  const fillEmpty = (found: { title: string | null; description: string | null; icon: string | null }): void => {
+    const isTitleEmpty = form.getFieldValue('title').trim() === '';
+    if (isTitleEmpty && found.title !== null) {
+      form.setFieldValue('title', found.title);
+    }
+    const isDescriptionEmpty = form.getFieldValue('description').trim() === '';
+    if (isDescriptionEmpty && found.description !== null) {
+      form.setFieldValue('description', found.description);
+    }
+    if (form.getFieldValue('icon') === null && found.icon !== null) {
+      form.setFieldValue('icon', found.icon);
+    }
   };
   const form = useAppForm({
     defaultValues,
@@ -154,6 +195,31 @@ export function ItemDialog({ open, onOpenChange, page, item, sectionId }: ItemDi
       hasUnsavedChanges={() => form.state.isDefaultValue === false}
       contentSlot={
         <FormElement onSubmit={() => form.handleSubmit()}>
+          <form.Subscribe selector={(state) => state.values.discoveredId}>
+            {(discoveredId) =>
+              isEdit ? (
+                discoveredId === null ? null : (
+                  <LinkedAppNote
+                    discoveredId={discoveredId}
+                    onUnlink={() => form.setFieldValue('discoveredId', null)}
+                  />
+                )
+              ) : (
+                <DiscoveredAppPicker
+                  discoveredId={discoveredId}
+                  onPick={(app) => {
+                    form.setFieldValue('kind', 'LINK');
+                    form.setFieldValue('title', app.name);
+                    form.setFieldValue('url', app.url);
+                    form.setFieldValue('description', app.description ?? '');
+                    form.setFieldValue('icon', app.icon);
+                    form.setFieldValue('discoveredId', app.id);
+                  }}
+                  onManual={() => form.setFieldValue('discoveredId', null)}
+                />
+              )
+            }
+          </form.Subscribe>
           {shouldPickSection ? (
             <SelectField form={form} name="sectionId" label="Section" options={sectionOptions} />
           ) : null}
@@ -191,6 +257,9 @@ export function ItemDialog({ open, onOpenChange, page, item, sectionId }: ItemDi
                 }}
               />
             )}
+          </form.Subscribe>
+          <form.Subscribe selector={(state) => ({ url: state.values.url, isWidget: state.values.kind === 'WIDGET' })}>
+            {({ url, isWidget }) => (isWidget ? null : <FillInButton url={url} onDescribed={fillEmpty} />)}
           </form.Subscribe>
           <TextareaField
             form={form}

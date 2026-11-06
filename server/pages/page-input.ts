@@ -153,6 +153,12 @@ const itemSchema = z.object({
     .refine((value) => value === '' || isWebUrl(value), 'Check a full http:// or https:// address.')
     .nullish(),
   widget: widgetInputSchema.nullish(),
+  /** Whether it exists is checked against the discovered apps by the resolver, not here. */
+  discoveredId: z
+    .string()
+    .trim()
+    .max(maxSlugLength * 2)
+    .nullish(),
 });
 
 /**
@@ -296,5 +302,6 @@ export function parseItemFields(input: unknown): ItemFields {
     check: { enabled: parsed.checkEnabled ?? isWidget === false, url: blankToNull(parsed.checkUrl) },
     widget: isWidget && widgetInput !== null ? widgetFromInput(widgetInput) : null,
     visibleTo: parsed.visibleTo ?? [],
+    discoveredId: blankToNull(parsed.discoveredId),
   };
 }

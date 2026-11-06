@@ -198,6 +198,8 @@ function itemFromDisk(item: DiskItem, id: string): Item {
     // diskItemSchema has already refused a widget that would come back as a sentence.
     widget: typeof widget === 'string' ? null : widget,
     visibleTo: item.visibleTo,
+    // YAML never carries a link to a discovered app: those ids belong to one database.
+    discoveredId: null,
   };
 }
 

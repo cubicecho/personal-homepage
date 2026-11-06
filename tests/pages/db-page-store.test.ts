@@ -166,6 +166,7 @@ describe('database page store', () => {
       check: { enabled: false, url: null },
       widget: null,
       visibleTo: [],
+      discoveredId: null,
     });
   });
 

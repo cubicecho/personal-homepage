@@ -48,6 +48,7 @@ describe('parseItemFields', () => {
       check: { enabled: true, url: null },
       widget: null,
       visibleTo: [],
+      discoveredId: null,
     });
   });
 
