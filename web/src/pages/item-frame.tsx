@@ -80,7 +80,11 @@ export function ItemFrame({ item, menuSlot }: ItemFrameProps) {
     return (
       <Card className="group relative h-full gap-0 px-1.5 pt-0 pb-1.5">
         <h3 className="sr-only">{item.title}</h3>
-        {/* A slim strip over the frame for the corner controls, so they never cover the service's own page. */}
+        {/*
+          A slim strip over the frame for the corner controls, so they never cover the service's own page. They
+          show while the pointer is on the card's padding or this strip, or focus is inside the card: a browser
+          reports no hover from inside a cross-origin frame, so the framed page itself can't reveal them.
+        */}
         <div className="flex h-7 flex-row items-center justify-end gap-0.5">
           <ItemStatusDot pageSlug={pageSlug} item={item} onlyWhenDown />
           <span className="opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 [@media(hover:none)]:opacity-60">
