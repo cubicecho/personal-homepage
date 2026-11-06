@@ -9,13 +9,12 @@ import { PAGE_LIMIT_DEFAULTS } from '../core/defaults.ts';
 import { badInput, notFound } from '../core/errors.ts';
 import type { Database } from '../db/client.ts';
 import { discoveredApps, type ItemRow, items, type PageRow, pages, type SectionRow, sections } from '../db/schema.ts';
-import { HOME_SLUG, type Item, ItemKind, itemsOf, OpensIn, type Page, type PageStore } from './page.ts';
+import { HOME_SLUG, type Item, ItemKind, itemsOf, OpensIn, type Page, type PageStore, type Section } from './page.ts';
 import * as edits from './page-edits.ts';
 import { describeIssues, SLUG_PATTERN } from './page-input.ts';
 import { slugFrom, uniqueSlug } from './slug.ts';
 import type { Widget } from './widget.ts';
 import { diskWidgetSchema, widgetFromDisk, widgetToDisk } from './widget-disk.ts';
-import { emptySection } from './yaml-format.ts';
 
 const { maxPages } = PAGE_LIMIT_DEFAULTS;
 
@@ -23,8 +22,19 @@ const { maxPages } = PAGE_LIMIT_DEFAULTS;
 const FALLBACK_PAGE_SLUG = 'page';
 /** The icon of the page every database starts with. */
 const HOME_ICON = 'house';
+/** The id of a page's untitled first section. */
+const MAIN_SECTION_ID = 'main';
 /** The advisory lock every write takes, so writes run one at a time. Any fixed number would do. */
 const WRITE_LOCK_KEY = 4_206_001;
+
+/**
+ * Builds the untitled section a new page starts with.
+ *
+ * @returns The section, with no items.
+ */
+function emptySection(): Section {
+  return { id: MAIN_SECTION_ID, title: null, collapsed: false, visibleTo: [], items: [] };
+}
 
 /** A transaction on either driver. */
 type Transaction = PgAsyncTransaction<PgQueryResultHKT>;

@@ -29,7 +29,6 @@ export default defineConfig({
     proxy: {
       '^/graphql(\\?|$)': API_ORIGIN,
       '/healthz': API_ORIGIN,
-      '/export.zip': API_ORIGIN,
       '/icons/': API_ORIGIN,
       // The OIDC sign-in's start and callback (server/http/sso.ts).
       '/sso/': API_ORIGIN,

@@ -1,4 +1,3 @@
-import { strFromU8, unzipSync } from 'fflate';
 import { ErrorCode } from '../../server/core/errors.ts';
 import type { OpenedDatabase } from '../../server/db/client.ts';
 import { openTestDatabase, resetTestDatabase } from '../db.ts';
@@ -152,28 +151,6 @@ describe('an instance with sign-in set up', () => {
     );
     const asGuest = await signedIn.gql('{ page(slug: "home") { sections { id items { id } } } }', {}, asProxyUser('x'));
     expect(asGuest.data.page.sections).toEqual([{ id: 'main', items: [] }]);
-  });
-
-  it('leaves hidden pages and items out of the zip a viewer downloads', async () => {
-    const signedIn = await startSignedIn();
-    const admin = asProxyUser('admin');
-    await signedIn.gql(ACCESS, {}, admin);
-    await signedIn.gql(ADD_PAGE, { input: { title: 'Kids', visibleTo: ['family'] } }, admin);
-
-    const download = async (headers: Record<string, string>): Promise<string[]> => {
-      const response = await fetch(`${signedIn.base}/export.zip`, { headers });
-      const files = unzipSync(new Uint8Array(await response.arrayBuffer()));
-      return Object.keys(files).sort();
-    };
-    expect(await download(asProxyUser('guest'))).toEqual(['pages/home.yaml', 'site.yaml']);
-    expect(await download(admin)).toEqual(['pages/home.yaml', 'pages/kids.yaml', 'site.yaml']);
-    const zipped = unzipSync(
-      new Uint8Array(await (await fetch(`${signedIn.base}/export.zip`, { headers: admin })).arrayBuffer()),
-    );
-    expect(strFromU8(zipped['pages/kids.yaml'] ?? new Uint8Array())).toContain('family');
-
-    const anonymous = await fetch(`${signedIn.base}/export.zip`);
-    expect(anonymous.status).toBe(401);
   });
 
   it('signs favicon links, and refuses the icon route without one', async () => {

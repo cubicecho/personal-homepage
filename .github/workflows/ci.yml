@@ -50,14 +50,15 @@ jobs:
             echo "::error::server/db/schema.ts changed without a migration. Run npm run db:generate and commit drizzle/."
             exit 1
           fi
-      # The server itself on Postgres: boots, migrates (already applied), imports the sample pages, serves them.
+      # The server itself on Postgres: boots, migrates (already applied), creates Home, and keeps a page it is given.
       - name: The server runs on Postgres
         run: |
-          npm run db:import-yaml -- --data-dir examples/data --replace
           PORT=3010 node server/index.ts > server.log 2>&1 &
           for attempt in $(seq 30); do curl -fsS http://127.0.0.1:3010/healthz && break; sleep 1; done
-          curl -fsS -H 'content-type: application/json' \
-            -d '{"query":"{ pages { slug } }"}' http://127.0.0.1:3010/graphql | grep -q '"slug":"tools"'
+          gql() { curl -fsS -H 'content-type: application/json' -d "$1" http://127.0.0.1:3010/graphql; }
+          gql '{"query":"mutation { createPage(input: { title: \"Tools\" }) { slug } }"}' | grep -q '"slug":"tools"'
+          gql '{"query":"{ pages { slug } }"}' | grep -q '"slug":"home"'
+          gql '{"query":"{ pages { slug } }"}' | grep -q '"slug":"tools"'
       - name: Server log
         if: failure()
         run: cat server.log
