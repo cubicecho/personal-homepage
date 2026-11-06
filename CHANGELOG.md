@@ -1,3 +1,10 @@
+# [3.4.0](https://github.com/cubicecho/personal-homepage/compare/v3.3.0...v3.4.0) (2026-11-06)
+
+
+### Features
+
+* **web:** put "Go to <page>" in the toast after moving an item ([c7ac629](https://github.com/cubicecho/personal-homepage/commit/c7ac629e10125888fe8ae714a2ba7963d17d533d)), closes [cubeui#403](https://github.com/cubeui/issues/403)
+
 # [3.3.0](https://github.com/cubicecho/personal-homepage/compare/v3.2.0...v3.3.0) (2026-11-06)
 
 
