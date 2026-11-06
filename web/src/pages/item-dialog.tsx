@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { ItemInput, ItemKind, OpensIn } from '@/__generated__/graphql';
-import { InputField, NumberField, TextareaField, useAppForm } from '@/components/app-form';
+import { InputField, NumberField, SelectField, TextareaField, useAppForm } from '@/components/app-form';
 import { DialogLayout } from '@/components/dialog-layout';
 import { RadioGroupField, type RadioOption } from '@/components/radio-group-field';
 import { Alert } from '@/components/ui/alert';
@@ -10,7 +10,7 @@ import { messageOf } from '@/lib/error-message';
 import { checkFrameHeight, checkLength, checkTitle, checkUrl } from './form-checks';
 import { IconField } from './icon-field';
 import { ITEM_KINDS, OPENS_IN } from './item-kinds';
-import { type Item, type Page, useAddItem, usePageLimits, useUpdateItem } from './use-pages';
+import { type Item, type Page, sectionLabel, useAddItem, usePageLimits, useUpdateItem } from './use-pages';
 
 interface ItemDialogProps {
   open: boolean;
@@ -19,6 +19,8 @@ interface ItemDialogProps {
   page: Page;
   /** The item to edit. Left out, the dialog adds one. */
   item?: Item | undefined;
+  /** The section a new item goes in, when the page has several. Left out, the first. */
+  sectionId?: string | undefined;
 }
 
 /** What the form holds. */
@@ -30,6 +32,8 @@ interface ItemDraft {
   icon: string | null;
   description: string;
   frameHeightPx: number | null;
+  /** The section a new item goes in. Unused when editing. */
+  sectionId: string;
 }
 
 const KIND_OPTIONS: readonly RadioOption[] = Object.entries(ITEM_KINDS).map(([kind, { Glyph, label, summary }]) => ({
@@ -69,12 +73,14 @@ function toInput(draft: ItemDraft): ItemInput {
 }
 
 /** Adds an item to a page, or changes one. */
-export function ItemDialog({ open, onOpenChange, page, item }: ItemDialogProps) {
+export function ItemDialog({ open, onOpenChange, page, item, sectionId }: ItemDialogProps) {
   const limits = usePageLimits().data;
   const addItem = useAddItem();
   const updateItem = useUpdateItem();
   const [serverError, setServerError] = useState<string | undefined>(undefined);
   const isEdit = item !== undefined;
+  const shouldPickSection = isEdit === false && page.sections.length > 1;
+  const sectionOptions = page.sections.map((section) => ({ value: section.id, label: sectionLabel(section) }));
   const heightBounds = limits && { min: limits.minFrameHeightPx, max: limits.maxFrameHeightPx };
 
   const defaultValues: ItemDraft = {
@@ -85,6 +91,7 @@ export function ItemDialog({ open, onOpenChange, page, item }: ItemDialogProps) 
     icon: item?.icon ?? null,
     description: item?.description ?? '',
     frameHeightPx: item?.frameHeightPx ?? null,
+    sectionId: sectionId ?? page.sections[0]?.id ?? '',
   };
   const form = useAppForm({
     defaultValues,
@@ -95,7 +102,7 @@ export function ItemDialog({ open, onOpenChange, page, item }: ItemDialogProps) 
         if (isEdit) {
           await updateItem.mutateAsync({ pageSlug: page.slug, id: item.id, input });
         } else {
-          await addItem.mutateAsync({ pageSlug: page.slug, input });
+          await addItem.mutateAsync({ pageSlug: page.slug, sectionId: value.sectionId || null, input });
         }
         onOpenChange(false);
       } catch (error) {
@@ -113,6 +120,9 @@ export function ItemDialog({ open, onOpenChange, page, item }: ItemDialogProps) 
       hasUnsavedChanges={() => form.state.isDefaultValue === false}
       contentSlot={
         <FormElement onSubmit={() => form.handleSubmit()}>
+          {shouldPickSection ? (
+            <SelectField form={form} name="sectionId" label="Section" options={sectionOptions} />
+          ) : null}
           <RadioGroupField form={form} name="kind" label="Kind" variant="card" options={KIND_OPTIONS} />
           <InputField
             form={form}
