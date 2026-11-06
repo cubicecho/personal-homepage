@@ -8,7 +8,11 @@ import { routeTree } from '@/route-tree.gen';
 import './index.css';
 
 const queryClient = createQueryClient();
-const router = createRouter({ routeTree });
+const router = createRouter({
+  routeTree,
+  // Toasts are drawn inside the router, so one can hold a router link ("Go to Media" after a move).
+  InnerWrap: ({ children }) => <ToastProvider>{children}</ToastProvider>,
+});
 
 declare module '@tanstack/react-router' {
   interface Register {
@@ -24,9 +28,7 @@ if (root === null) {
 createRoot(root).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
-      <ToastProvider>
-        <RouterProvider router={router} />
-      </ToastProvider>
+      <RouterProvider router={router} />
     </QueryClientProvider>
   </StrictMode>,
 );
