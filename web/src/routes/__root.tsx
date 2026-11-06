@@ -38,6 +38,7 @@ import { type Page, usePages } from '@/pages/use-pages';
 import { commandKeyLabel } from '@/search/hotkeys';
 import { SearchButton, SearchProvider } from '@/search/search-launcher';
 import { ThemeMenu } from '@/shell/theme-menu';
+import { useInertFramesUnderOverlays } from '@/shell/use-inert-frames';
 import { useSidebarFold } from '@/shell/use-sidebar-fold';
 
 const SidebarLink = createLink(SidebarNavItem);
@@ -167,6 +168,7 @@ function pageIcon(page: Page) {
  */
 function RootRoute() {
   useThemePreference();
+  useInertFramesUnderOverlays();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (state) => state.location.pathname });
