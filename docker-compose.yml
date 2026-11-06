@@ -30,7 +30,8 @@ services:
       # DOCKHAND_TOKEN: ${DOCKHAND_TOKEN}
       # With the Docker socket mounted below, the name other devices reach this host by:
       # DISCOVERY_DOCKER_HOST: nas.lan
-    # mDNS discovery needs host networking: uncomment this and remove `ports:` (the app listens on PORT on the host).
+    # mDNS discovery needs host networking: uncomment this and remove `ports:`. The app then listens on the
+    # host's port 3000; to use another, change PORT under `environment` above (.env's PORT has no effect here).
     # network_mode: host
     # depends_on:
     #   postgres: { condition: service_healthy }
