@@ -47,6 +47,7 @@ describe('parseItemFields', () => {
       frameHeightPx: null,
       check: { enabled: true, url: null },
       widget: null,
+      visibleTo: [],
     });
   });
 
@@ -111,8 +112,12 @@ describe('parseItemFields', () => {
 
 describe('parseNewPage', () => {
   it('leaves a missing or blank slug for the store to make', () => {
-    expect(parseNewPage({ title: 'Media' })).toEqual({ title: 'Media', icon: null });
-    expect(parseNewPage({ title: 'Media', slug: null, icon: 'film' })).toEqual({ title: 'Media', icon: 'film' });
+    expect(parseNewPage({ title: 'Media' })).toEqual({ title: 'Media', icon: null, visibleTo: [] });
+    expect(parseNewPage({ title: 'Media', slug: null, icon: 'film' })).toEqual({
+      title: 'Media',
+      icon: 'film',
+      visibleTo: [],
+    });
   });
 
   it('refuses favicon as a page icon: a page has no site', () => {
@@ -136,8 +141,12 @@ describe('parsePagePatch', () => {
 
 describe('parseSectionFields', () => {
   it('makes a blank title null and folding default to open', () => {
-    expect(parseSectionFields({ title: '  ' })).toEqual({ title: null, collapsed: false });
-    expect(parseSectionFields({ title: ' Watch ', collapsed: true })).toEqual({ title: 'Watch', collapsed: true });
+    expect(parseSectionFields({ title: '  ' })).toEqual({ title: null, collapsed: false, visibleTo: [] });
+    expect(parseSectionFields({ title: ' Watch ', collapsed: true })).toEqual({
+      title: 'Watch',
+      collapsed: true,
+      visibleTo: [],
+    });
   });
 
   it('refuses an over-long title', () => {

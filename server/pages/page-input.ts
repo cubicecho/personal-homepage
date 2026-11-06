@@ -88,6 +88,21 @@ const itemIcon = z
   .refine((value) => isIconRef(value, true), `${ICON_HINT} Or favicon.`)
   .nullable();
 
+/**
+ * Tidies a list of group names: trimmed, blanks dropped, each kept once, in the order given.
+ *
+ * @param groups - The names as sent.
+ * @returns The names.
+ */
+function tidyGroups(groups: readonly string[]): string[] {
+  return [...new Set(groups.map((group) => group.trim()).filter((group) => group !== ''))];
+}
+
+const visibleTo = z
+  .array(z.string().max(PAGE_LIMIT_DEFAULTS.maxGroupNameLength, 'Keep group names short.'))
+  .max(PAGE_LIMIT_DEFAULTS.maxVisibleToGroups)
+  .transform(tidyGroups);
+
 const newPageSchema = z.object({
   title,
   slug: z
@@ -97,16 +112,19 @@ const newPageSchema = z.object({
     .regex(SLUG_PATTERN, 'Use lower-case letters, digits and single hyphens, for example media-server.')
     .nullish(),
   icon: pageIcon.optional().default(null),
+  visibleTo: visibleTo.nullish(),
 });
 
 const pagePatchSchema = z.object({
   title: title.optional(),
   icon: pageIcon.optional(),
+  visibleTo: visibleTo.nullish(),
 });
 
 const sectionSchema = z.object({
   title: z.string().trim().max(maxTitleLength).nullish(),
   collapsed: z.boolean().nullish(),
+  visibleTo: visibleTo.nullish(),
 });
 
 const itemSchema = z.object({
@@ -124,6 +142,7 @@ const itemSchema = z.object({
     .nullish(),
   opensIn: z.enum(Object.values(OpensIn)).nullish(),
   icon: itemIcon.optional().default(null),
+  visibleTo: visibleTo.nullish(),
   description: z.string().trim().max(maxDescriptionLength).nullish(),
   frameHeightPx: z.int().min(minFrameHeightPx).max(maxFrameHeightPx).nullish(),
   checkEnabled: z.boolean().nullish(),
@@ -186,9 +205,10 @@ function blankToNull(value: string | null | undefined): string | null {
  * @throws BAD_USER_INPUT when a field is out of bounds.
  */
 export function parseNewPage(input: unknown): NewPage {
-  const { slug, ...rest } = parseOrRefuse(newPageSchema, input);
+  const { slug, visibleTo: groups, ...rest } = parseOrRefuse(newPageSchema, input);
   const hasSlug = slug !== null && slug !== undefined && slug !== '';
-  return hasSlug ? { ...rest, slug } : rest;
+  const page = { ...rest, visibleTo: groups ?? [] };
+  return hasSlug ? { ...page, slug } : page;
 }
 
 /**
@@ -207,6 +227,10 @@ export function parsePagePatch(input: unknown): PagePatch {
   if (parsed.icon !== undefined) {
     patch.icon = parsed.icon;
   }
+  const groups = parsed.visibleTo;
+  if (groups !== undefined && groups !== null) {
+    patch.visibleTo = groups;
+  }
   return patch;
 }
 
@@ -214,12 +238,16 @@ export function parsePagePatch(input: unknown): PagePatch {
  * Validates a section's fields.
  *
  * @param input - `SectionInput` as sent.
- * @returns The fields. A blank title is null; folding defaults to open.
+ * @returns The fields. A blank title is null; folding defaults to open, and visibility to everyone.
  * @throws BAD_USER_INPUT when the title is too long.
  */
 export function parseSectionFields(input: unknown): SectionFields {
   const parsed = parseOrRefuse(sectionSchema, input);
-  return { title: blankToNull(parsed.title), collapsed: parsed.collapsed ?? false };
+  return {
+    title: blankToNull(parsed.title),
+    collapsed: parsed.collapsed ?? false,
+    visibleTo: parsed.visibleTo ?? [],
+  };
 }
 
 /**
@@ -267,5 +295,6 @@ export function parseItemFields(input: unknown): ItemFields {
     frameHeightPx: isFrame ? (parsed.frameHeightPx ?? defaultFrameHeightPx) : null,
     check: { enabled: parsed.checkEnabled ?? isWidget === false, url: blankToNull(parsed.checkUrl) },
     widget: isWidget && widgetInput !== null ? widgetFromInput(widgetInput) : null,
+    visibleTo: parsed.visibleTo ?? [],
   };
 }

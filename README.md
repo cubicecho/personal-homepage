@@ -224,7 +224,86 @@ the store.
 To change the tables, edit `server/db/schema.ts`, run `npm run db:generate`, and commit the new folder in
 `drizzle/`.
 
+## Sign-in
+
+A new homepage has no sign-in: anyone who can reach it can see and change everything, exactly as before
+sign-in existed, so an upgrade locks nobody out. It says so above every page until sign-in is set up.
+
+Sign-in is set up in one of two ways, both made for [heautou](https://github.com/cubicecho/heautou). Any OpenID
+Connect provider, or any proxy that sends Authelia-style `Remote-*` headers, works too.
+
+### Pairing with heautou (OpenID Connect)
+
+1. In heautou, go to **Clients → Pair an app**. Choose the groups that may sign in, keep the groups claim as
+   `groups`, and choose **Make setup URL**.
+2. In the homepage, go to **Settings**, paste the setup URL, and choose **Pair**. The homepage registers itself
+   with heautou. It needs no client ID, secret, or restart.
+3. The homepage now asks for sign-in. Choose **Sign in with heautou**. The first person to sign in becomes the
+   admin.
+
+To unpair, choose **Disconnect** on the same page: the client is deleted at heautou too. To pin the provider
+instead, set `OIDC_ISSUER` and `OIDC_CLIENT_ID` (and `OIDC_CLIENT_SECRET`) in the environment. That wins over a
+pairing, and can't be changed from the app. Register the redirect URI that Settings shows,
+`<APP_URL>/api/auth/callback/oidc`.
+
+- **Groups:** a person's groups come from the ID token's `groups` claim (`OIDC_GROUPS_CLAIM` to read another),
+  copied at each sign-in.
+- **No email address needed:** a heautou user without one signs in under a placeholder address that is never
+  shown.
+- **Sessions:** kept in the database for 30 days, and sent as bearer tokens. There are no passwords or sign-in
+  links.
+
+### Forward auth (heautou Protected sites, Authelia, Authentik)
+
+When a reverse proxy already asks heautou about every request
+([heautou's forward-auth guide](https://github.com/cubicecho/heautou/blob/main/docs/forward-auth.md)), the
+homepage can trust what it says:
+
+```sh
+FORWARD_AUTH_TRUSTED_PROXIES=172.18.0.0/16   # the proxy's address or range; comma-separated
+```
+
+`Remote-User`, `Remote-Name`, `Remote-Email` and `Remote-Groups` are then believed, but only on connections from
+those addresses. From anywhere else they are ignored, so nobody can claim to be someone by sending them. Each
+person gets an account the first time the proxy names them, linked by address to an OIDC account when both
+exist. The first becomes the admin.
+
+### Who may see and change what
+
+|                               | Open (no sign-in set up) | Sign-in set up                                                                 |
+| ----------------------------- | ------------------------ | ------------------------------------------------------------------------------ |
+| See the pages                 | Anyone                   | Anyone signed in, or anyone at all with `PUBLIC_VIEW=true`                     |
+| Change anything               | Anyone                   | The admin (the first account), and members of `ADMIN_GROUPS` (comma-separated) |
+| Pair or disconnect a provider | Anyone                   | The same editors; anyone while nobody has an account yet                       |
+
+**Limiting by group:** a page, section or item can be limited to groups with **Who can see it** in its dialog
+(`visibleTo`). People outside those groups don't see it anywhere:
+
+- it is missing from the pages, search, status checks and widget data
+- it is left out of the zip they download
+- its address answers _not found_
+
+Editors see everything, to be able to manage it.
+
+### Settings
+
+| Variable                                              | Meaning                                                                                           |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `APP_URL`                                             | Where people open the homepage, such as `https://home.example.com`. Needed for the OIDC redirect. |
+| `BETTER_AUTH_SECRET`                                  | What sessions are signed with. Unset, one is made and kept in `DATA_DIR/auth-secret`.             |
+| `OIDC_ISSUER`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET` | A provider set in the environment, instead of pairing.                                            |
+| `OIDC_NAME`, `OIDC_CLIENT_AUTH`, `OIDC_GROUPS_CLAIM`  | Its button name, how the secret is sent, and the groups claim.                                    |
+| `FORWARD_AUTH_TRUSTED_PROXIES`                        | Addresses and CIDR ranges whose `Remote-*` headers are believed.                                  |
+| `ADMIN_GROUPS`                                        | Groups whose members may edit, besides the admin.                                                 |
+| `PUBLIC_VIEW`                                         | `true` to let people who are not signed in see (not change) the pages.                            |
+
 ## Security
 
-There is no sign-in. Anyone who can reach the port can edit the pages. Keep it on a trusted network, or put it
-behind a proxy that authenticates.
+Until sign-in is set up, anyone who can reach the port can change the pages. With it set up:
+
+- **Sign-in is throttled.** Spending sign-in tokens and pairing are limited per client address. `TRUST_PROXY`
+  has to name the proxy in front, so that the address is the client's own.
+- **Hidden things can't be found.** Favicon addresses carry a signature, since an image request sends no session.
+  Anything hidden answers as though it did not exist.
+- **Forward auth needs the proxy to protect it.** Only trust a proxy that strips `Remote-*` headers from the
+  browser's own request; heautou's snippets do.

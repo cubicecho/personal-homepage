@@ -61,7 +61,13 @@ export async function importYamlData(db: Database, data: YamlData, options: Impo
     throw new Error('The database already holds pages. Pass --replace to delete them and import these instead.');
   }
   const hasHome = data.pages.some((page) => page.slug === HOME_SLUG);
-  const freshHome: Page = { slug: HOME_SLUG, title: 'Home', icon: 'house', sections: [emptySection()] };
+  const freshHome: Page = {
+    slug: HOME_SLUG,
+    title: 'Home',
+    icon: 'house',
+    visibleTo: [],
+    sections: [emptySection()],
+  };
   const toWrite = hasHome ? data.pages : [freshHome, ...data.pages];
 
   const hasSearch = data.search !== undefined && data.search !== null;

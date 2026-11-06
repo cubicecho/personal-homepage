@@ -110,6 +110,10 @@ export interface PageLimitSettings {
   minWidgetRefreshSeconds: number;
   /** Longest API widget request body, in characters. */
   maxWidgetBodyLength: number;
+  /** Most groups one page, section or item may be limited to. */
+  maxVisibleToGroups: number;
+  /** Longest group name, in characters. */
+  maxGroupNameLength: number;
 }
 
 export const PAGE_LIMIT_DEFAULTS: Readonly<PageLimitSettings> = Object.freeze({
@@ -130,6 +134,8 @@ export const PAGE_LIMIT_DEFAULTS: Readonly<PageLimitSettings> = Object.freeze({
   maxWidgetCacheSeconds: 86_400,
   minWidgetRefreshSeconds: 15,
   maxWidgetBodyLength: 4096,
+  maxVisibleToGroups: 20,
+  maxGroupNameLength: 64,
 });
 
 /** How item statuses are checked (server/status/). */
@@ -274,4 +280,55 @@ export const WIDGET_DEFAULTS: Readonly<WidgetSettings> = Object.freeze({
   secretFileDirs: Object.freeze(['/run/secrets']),
   maxSecretFileBytes: 65_536,
   maxCachedAnswers: 500,
+});
+
+/** Signing in (server/auth/, server/sso/). */
+export interface AuthSettings {
+  /** How long a session lasts. Long: signing in again means a round trip through the provider. */
+  sessionTtlDays: number;
+  /** How long the token an OIDC callback hands the app works: the hop from the callback to `/auth/sso`. */
+  oneTimeTokenTtlMinutes: number;
+  /** The shortest `BETTER_AUTH_SECRET` production accepts. `openssl rand -hex 32` gives twice this. */
+  minSecretLength: number;
+  /** What the sign-in button calls the provider when nothing names it. `OIDC_NAME` overrides it. */
+  oidcName: string;
+  /** How a confidential OIDC client sends its secret. `OIDC_CLIENT_AUTH` overrides it. */
+  oidcClientAuth: 'client_secret_basic' | 'client_secret_post';
+  /** How long pairing waits on the provider before calling it unreachable, in milliseconds. */
+  oidcPairingTimeoutMs: number;
+  /** The ID token claim a user's groups are read from. `OIDC_GROUPS_CLAIM` overrides it. heautou's default. */
+  oidcGroupsClaim: string;
+  /** How long a forward-auth identity is trusted before its row is read again, in seconds. */
+  forwardAuthCacheSeconds: number;
+  /** How long a favicon address handed to a viewer works, in hours. */
+  iconLinkTtlHours: number;
+}
+
+export const AUTH_DEFAULTS: Readonly<AuthSettings> = Object.freeze({
+  sessionTtlDays: 30,
+  oneTimeTokenTtlMinutes: 3,
+  minSecretLength: 32,
+  oidcName: 'SSO',
+  // The default the OIDC spec names.
+  oidcClientAuth: 'client_secret_basic',
+  oidcPairingTimeoutMs: 10_000,
+  oidcGroupsClaim: 'groups',
+  forwardAuthCacheSeconds: 30,
+  iconLinkTtlHours: 24,
+});
+
+/** The sign-in throttle: attempts per key in a sliding window, in this process. */
+export interface RateLimitSettings {
+  /** Attempts allowed per key inside one window. */
+  maxAttempts: number;
+  /** How long an attempt counts against its key, in minutes. */
+  windowMinutes: number;
+  /** How many keys may build up before stale ones are swept. */
+  sweepAtKeys: number;
+}
+
+export const RATE_LIMIT_DEFAULTS: Readonly<RateLimitSettings> = Object.freeze({
+  maxAttempts: 5,
+  windowMinutes: 15,
+  sweepAtKeys: 10_000,
 });

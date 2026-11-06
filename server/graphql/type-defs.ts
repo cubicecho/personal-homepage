@@ -146,6 +146,8 @@ export const TYPE_DEFS = /* GraphQL */ `
     checkUrl: String
     "What a WIDGET shows. Null for the other kinds."
     widget: Widget
+    "The groups that may see it, besides editors. Empty means everyone who may see the homepage."
+    visibleTo: [String!]!
   }
 
   "A group of items on a page, with an optional heading."
@@ -156,6 +158,8 @@ export const TYPE_DEFS = /* GraphQL */ `
     title: String
     "Whether it starts folded. A browser remembers its own choice after that."
     collapsed: Boolean!
+    "The groups that may see it, besides editors. Empty means everyone who may see the homepage."
+    visibleTo: [String!]!
     items: [Item!]!
   }
 
@@ -170,6 +174,8 @@ export const TYPE_DEFS = /* GraphQL */ `
     iconUrl: String
     "Whether this is the home page, which is always first and cannot be deleted or moved."
     isHome: Boolean!
+    "The groups that may see it, besides editors. Empty means everyone who may see the homepage."
+    visibleTo: [String!]!
     "At least one."
     sections: [Section!]!
     "Every item, first section first: the sections flattened."
@@ -435,12 +441,16 @@ export const TYPE_DEFS = /* GraphQL */ `
     "Lower-case letters, digits and single hyphens. Made from the title when left out."
     slug: String
     icon: String
+    "The groups that may see it, besides editors. Empty or left out for everyone."
+    visibleTo: [String!]
   }
 
   "What to change on a page. A field left out is kept; icon: null clears the icon."
   input UpdatePageInput {
     title: String
     icon: String
+    "The groups that may see it, besides editors. Empty for everyone; left out to keep."
+    visibleTo: [String!]
   }
 
   "A section's fields, for adding one or replacing one's."
@@ -449,6 +459,8 @@ export const TYPE_DEFS = /* GraphQL */ `
     title: String
     "Whether it starts folded. Defaults to false."
     collapsed: Boolean
+    "The groups that may see it, besides editors. Empty or left out for everyone."
+    visibleTo: [String!]
   }
 
   "An item's fields, for adding one or replacing one's."
@@ -469,6 +481,8 @@ export const TYPE_DEFS = /* GraphQL */ `
     checkUrl: String
     "WIDGET only, and required there."
     widget: WidgetInput
+    "The groups that may see it, besides editors. Empty or left out for everyone."
+    visibleTo: [String!]
   }
 
   "A web search for the launcher."

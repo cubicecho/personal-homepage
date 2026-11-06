@@ -28,7 +28,8 @@ function pageOf(urls: Array<string | null>, checkUrls: Record<number, string> = 
     slug: HOME_SLUG,
     title: 'Home',
     icon: null,
-    sections: [{ id: 'main', title: null, collapsed: false, items }],
+    visibleTo: [],
+    sections: [{ id: 'main', title: null, collapsed: false, visibleTo: [], items }],
   };
 }
 

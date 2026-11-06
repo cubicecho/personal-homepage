@@ -1,3 +1,4 @@
+import { useCanEdit } from '@/auth/use-access';
 import { Disclosure } from '@/components/disclosure';
 import { EmptyState } from '@/components/empty-state';
 import { Button } from '@/components/ui/button';
@@ -71,14 +72,17 @@ interface SectionViewProps {
  */
 export function SectionView({ page, section, index, onAddItem, onEditItem }: SectionViewProps) {
   const [isOpen, setOpen] = useSectionOpen(page.slug, section);
-  const menu = <SectionMenu page={page} section={section} index={index} onAddItem={onAddItem} />;
-  const items = <SectionItems page={page} section={section} onAddItem={onAddItem} onEditItem={onEditItem} />;
+  const canEdit = useCanEdit();
+  const menu = canEdit ? <SectionMenu page={page} section={section} index={index} onAddItem={onAddItem} /> : null;
+  const items = (
+    <SectionItems page={page} section={section} canEdit={canEdit} onAddItem={onAddItem} onEditItem={onEditItem} />
+  );
 
   if (section.title === null) {
     const hasSiblings = page.sections.length > 1;
     return (
       <div className="flex flex-col gap-3">
-        {hasSiblings ? <div className="flex justify-end">{menu}</div> : null}
+        {hasSiblings && menu !== null ? <div className="flex justify-end">{menu}</div> : null}
         {items}
       </div>
     );
@@ -102,18 +106,24 @@ export function SectionView({ page, section, index, onAddItem, onEditItem }: Sec
 interface SectionItemsProps {
   page: Page;
   section: Section;
+  /** Whether the caller may change the section: without it, no menus and no add button. */
+  canEdit: boolean;
   onAddItem: () => void;
   onEditItem: (item: Item) => void;
 }
 
 /** A section's items as tile grids, frames and widgets, or one line saying it is empty. */
-function SectionItems({ page, section, onAddItem, onEditItem }: SectionItemsProps) {
+function SectionItems({ page, section, canEdit, onAddItem, onEditItem }: SectionItemsProps) {
   if (section.items.length === 0) {
     return (
       <EmptyState
         compact
         title="Nothing in this section yet."
-        actionSlot={<Button size="sm" variant="outline" iconSlot={<Plus />} content="Add item" onClick={onAddItem} />}
+        actionSlot={
+          canEdit ? (
+            <Button size="sm" variant="outline" iconSlot={<Plus />} content="Add item" onClick={onAddItem} />
+          ) : null
+        }
       />
     );
   }
@@ -124,9 +134,10 @@ function SectionItems({ page, section, onAddItem, onEditItem }: SectionItemsProp
    * @param entry - The item and its place.
    * @returns The menu.
    */
-  const menuFor = ({ item, index }: IndexedItem) => (
-    <ItemMenu page={page} section={section} item={item} index={index} onEdit={() => onEditItem(item)} />
-  );
+  const menuFor = ({ item, index }: IndexedItem) =>
+    canEdit ? (
+      <ItemMenu page={page} section={section} item={item} index={index} onEdit={() => onEditItem(item)} />
+    ) : null;
   const label = section.title === null ? `${page.title} tiles` : `${section.title} tiles`;
 
   return (

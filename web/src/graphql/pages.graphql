@@ -10,6 +10,7 @@ fragment ItemFields on Item {
   frameHeightPx
   checkEnabled
   checkUrl
+  visibleTo
   widget {
     type
     cacheSeconds
@@ -47,6 +48,7 @@ fragment SectionFields on Section {
   id
   title
   collapsed
+  visibleTo
   items {
     ...ItemFields
   }
@@ -58,6 +60,7 @@ fragment PageFields on Page {
   icon
   iconUrl
   isHome
+  visibleTo
   sections {
     ...SectionFields
   }

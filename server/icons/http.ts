@@ -5,6 +5,7 @@
 // SVG's scripts from running if someone opens it as a page.
 import path from 'node:path';
 import type { Express } from 'express';
+import { type IconLinks, isSignedIconPath } from '../auth/icon-links.ts';
 import { ICON_DEFAULTS } from '../core/defaults.ts';
 import { HttpStatus } from '../core/wire.ts';
 import { itemsOf, type PageStore } from '../pages/page.ts';
@@ -33,6 +34,11 @@ export function faviconPath(pageSlug: string, itemId: string): string {
 
 /** What the icon routes can be given in tests. */
 export interface IconRouteOptions {
+  /**
+   * How icon links are signed now. Asked per request: pairing a provider turns signing on while the
+   * server runs. Left out, links need no proof.
+   */
+  iconLinks?: () => IconLinks;
   fetch?: Fetch;
   now?: Clock;
 }
@@ -76,6 +82,14 @@ export function mountIcons(app: Express, pages: PageStore, dataDir: string, opti
 
   app.get(FAVICON_ROUTE, async (req, res) => {
     const { pageSlug, itemId } = req.params;
+    const links = options.iconLinks?.();
+    const query = new URLSearchParams(req.originalUrl.split('?')[1] ?? '');
+    const isAllowed = links === undefined || isSignedIconPath(faviconPath(pageSlug, itemId), query, links);
+    if (isAllowed === false) {
+      // The same answer as an item with no icon, so a missing proof says nothing about what exists.
+      res.status(HttpStatus.NotFound).type('text/plain').send('No icon.');
+      return;
+    }
     const siteUrl = await storedItemUrl(pages, pageSlug, itemId);
     const favicon = siteUrl === null ? null : await favicons.get(siteUrl);
     if (favicon === null) {
@@ -84,7 +98,8 @@ export function mountIcons(app: Express, pages: PageStore, dataDir: string, opti
     }
     const etag = `"${favicon.hash}"`;
     res.set({
-      'cache-control': `public, max-age=${ICON_DEFAULTS.faviconBrowserCacheSeconds}`,
+      // Private once links are signed: a shared cache would hand it to anyone who asks.
+      'cache-control': `${links?.isRequired ? 'private' : 'public'}, max-age=${ICON_DEFAULTS.faviconBrowserCacheSeconds}`,
       'content-security-policy': ICON_SECURITY_POLICY,
       'x-content-type-options': 'nosniff',
       etag,

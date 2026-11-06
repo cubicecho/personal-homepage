@@ -12,6 +12,8 @@ import {
   primaryKey,
   text,
   timestamp,
+  uniqueIndex,
+  uuid,
 } from 'drizzle-orm/pg-core';
 
 /** The one row `site_settings` holds. */
@@ -22,6 +24,8 @@ export const pages = pgTable('pages', {
   slug: text('slug').primaryKey(),
   title: text('title').notNull(),
   icon: text('icon'),
+  /** The groups that may see the page. Empty means everyone who may see the homepage. */
+  visibleTo: text('visible_to').array().notNull().default(sql`'{}'::text[]`),
   position: integer('position').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true })
@@ -41,6 +45,8 @@ export const sections = pgTable(
     /** null draws the items with no heading. */
     title: text('title'),
     collapsed: boolean('collapsed').notNull().default(false),
+    /** The groups that may see the section. Empty means everyone who may see its page. */
+    visibleTo: text('visible_to').array().notNull().default(sql`'{}'::text[]`),
     position: integer('position').notNull(),
   },
   (table) => [primaryKey({ name: 'pk_sections', columns: [table.pageSlug, table.id] })],
@@ -72,6 +78,8 @@ export const items = pgTable(
      * through the same checks. Secret references are kept as written. null for the other kinds.
      */
     widget: jsonb('widget').$type<Record<string, unknown>>(),
+    /** The groups that may see the item. Empty means everyone who may see its section. */
+    visibleTo: text('visible_to').array().notNull().default(sql`'{}'::text[]`),
     position: integer('position').notNull(),
   },
   (table) => [
@@ -110,3 +118,126 @@ export type PageRow = typeof pages.$inferSelect;
 export type SectionRow = typeof sections.$inferSelect;
 /** An item row as read. */
 export type ItemRow = typeof items.$inferSelect;
+
+// Sign-in. better-auth owns users, sessions, accounts and verifications through its Drizzle adapter
+// (auth/better-auth.ts maps them); `is_admin` and `groups` are this app's own columns on users.
+
+/** Someone who signs in: through the paired OIDC provider, or a proxy's forward auth. */
+export const users = pgTable(
+  'users',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    email: text('email').notNull(),
+    name: text('name'),
+    /** better-auth's: whether a provider vouched for the address. */
+    emailVerified: boolean('email_verified').notNull().default(false),
+    /** better-auth's column for a picture. The homepage shows none. */
+    image: text('image'),
+    /** Whether this account runs the instance: may edit, and pair sign-in. The first account is. */
+    isAdmin: boolean('is_admin').notNull().default(false),
+    /** The groups the account was last seen in: the OIDC groups claim at sign-in, or Remote-Groups. */
+    groups: text('groups').array().notNull().default(sql`'{}'::text[]`),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (table) => [uniqueIndex('uq_users_email').on(table.email)],
+);
+
+/** A signed-in browser, sent as `Authorization: Bearer <token>`. Deleting the row signs it out. */
+export const sessions = pgTable(
+  'sessions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    token: text('token').notNull().unique('uq_sessions_token'),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    ipAddress: text('ip_address'),
+    userAgent: text('user_agent'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (table) => [index('idx_sessions_user_id').on(table.userId)],
+);
+
+/** One way a user signs in: the OIDC provider (`oidc`), or a proxy's forward auth (`forward-auth`). */
+export const accounts = pgTable(
+  'accounts',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    /** The user's id at the provider: the `sub` claim, or the Remote-User name. */
+    accountId: text('account_id').notNull(),
+    providerId: text('provider_id').notNull(),
+    accessToken: text('access_token'),
+    refreshToken: text('refresh_token'),
+    idToken: text('id_token'),
+    accessTokenExpiresAt: timestamp('access_token_expires_at', { withTimezone: true }),
+    refreshTokenExpiresAt: timestamp('refresh_token_expires_at', { withTimezone: true }),
+    scope: text('scope'),
+    password: text('password'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (table) => [
+    index('idx_accounts_user_id').on(table.userId),
+    // One account per identity at a provider, so two first requests at once can't both make one.
+    uniqueIndex('uq_accounts_provider_account').on(table.providerId, table.accountId),
+  ],
+);
+
+/** Pending proofs better-auth keeps: one-time tokens, OIDC state. */
+export const verifications = pgTable(
+  'verifications',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    identifier: text('identifier').notNull(),
+    value: text('value').notNull(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (table) => [index('idx_verifications_identifier').on(table.identifier)],
+);
+
+/**
+ * The OIDC provider this instance was paired with (sso/pairing.ts): one row or none. OIDC_ISSUER in the
+ * environment wins over it. The client secret and the registration access token are credentials, and no
+ * resolver reads them back out.
+ */
+export const oidcSettings = pgTable(
+  'oidc_settings',
+  {
+    id: text('id').primaryKey().default('oidc'),
+    issuer: text('issuer').notNull(),
+    clientId: text('client_id').notNull(),
+    clientSecret: text('client_secret'),
+    clientAuth: text('client_auth').notNull().default('client_secret_basic'),
+    name: text('name').notNull(),
+    registrationAccessToken: text('registration_access_token'),
+    registrationClientUri: text('registration_client_uri'),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (table) => [check('ck_oidc_settings_singleton', sql`${table.id} = 'oidc'`)],
+);
+
+/** A user row as read. */
+export type UserRow = typeof users.$inferSelect;
