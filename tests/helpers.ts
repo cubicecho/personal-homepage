@@ -33,6 +33,7 @@ export function linkFields(title: string, overrides: Partial<ItemFields> = {}): 
     check: { enabled: true, url: null },
     visibleTo: [],
     widget: null,
+    discoveredId: null,
     ...overrides,
   };
 }
