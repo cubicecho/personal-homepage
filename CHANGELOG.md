@@ -1,3 +1,10 @@
+## [2.2.2](https://github.com/cubicecho/personal-homepage/compare/v2.2.1...v2.2.2) (2026-11-06)
+
+
+### Bug Fixes
+
+* **web:** keep menus open on a page that frames a focus-grabbing app ([5e5c2be](https://github.com/cubicecho/personal-homepage/commit/5e5c2beea2b8783e12e516354ac7cdbbf24f539b))
+
 ## [2.2.1](https://github.com/cubicecho/personal-homepage/compare/v2.2.0...v2.2.1) (2026-11-06)
 
 
