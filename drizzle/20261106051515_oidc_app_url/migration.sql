@@ -1,0 +1,1 @@
+ALTER TABLE "oidc_settings" ADD COLUMN "app_url" text;
