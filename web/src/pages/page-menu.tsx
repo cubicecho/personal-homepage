@@ -2,11 +2,12 @@ import { useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
-import { Ellipsis, Pencil, Trash2 } from '@/components/ui/icons';
+import { Ellipsis, Pencil, Plus, Trash2 } from '@/components/ui/icons';
 import { Menu, MenuContent, MenuItem, MenuSeparator, MenuTrigger } from '@/components/ui/menu';
 import { useToast } from '@/components/ui/toast';
 import { ArrowDown, ArrowUp } from '@/core/app-icons';
 import { messageOf } from '@/lib/error-message';
+import { SectionDialog } from '@/sections/section-dialog';
 import { PageDialog } from './page-dialog';
 import { type Page, useDeletePage, useMovePage } from './use-pages';
 
@@ -22,7 +23,7 @@ function itemCount(page: Page): string {
   return count === 1 ? '1 item' : `${count} items`;
 }
 
-/** The ⋯ menu on a page: edit, move up or down, delete. Home can only be edited. */
+/** The ⋯ menu on a page: edit, add a section, move up or down, delete. Home can't be moved or deleted. */
 export function PageMenu({ page, pages }: PageMenuProps) {
   const navigate = useNavigate();
   const toast = useToast();
@@ -31,6 +32,7 @@ export function PageMenu({ page, pages }: PageMenuProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editSession, setEditSession] = useState(0);
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
+  const [sectionSession, setSectionSession] = useState<number | null>(null);
   const index = pages.findIndex((known) => known.slug === page.slug);
   // Home is always first, so the first place another page can take is 1.
   const isFirstMovable = index <= 1;
@@ -75,6 +77,11 @@ export function PageMenu({ page, pages }: PageMenuProps) {
               setIsEditing(true);
             }}
           />
+          <MenuItem
+            iconSlot={<Plus />}
+            label="Add section"
+            onSelect={() => setSectionSession((count) => (count ?? 0) + 1)}
+          />
           {shouldShowPlaceActions ? (
             <>
               <MenuItem
@@ -96,6 +103,18 @@ export function PageMenu({ page, pages }: PageMenuProps) {
         </MenuContent>
       </Menu>
       {isEditing ? <PageDialog key={editSession} open onOpenChange={setIsEditing} page={page} /> : null}
+      {sectionSession === null ? null : (
+        <SectionDialog
+          key={sectionSession}
+          open
+          onOpenChange={(isOpen) => {
+            if (isOpen === false) {
+              setSectionSession(null);
+            }
+          }}
+          page={page}
+        />
+      )}
       <ConfirmDialog
         open={isConfirmingDelete}
         onOpenChange={setIsConfirmingDelete}

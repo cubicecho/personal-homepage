@@ -4,32 +4,37 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Ellipsis, Pencil, Trash2 } from '@/components/ui/icons';
 import { Menu, MenuContent, MenuItem, MenuSeparator, MenuTrigger } from '@/components/ui/menu';
 import { useToast } from '@/components/ui/toast';
-import { ArrowDown, ArrowUp } from '@/core/app-icons';
+import { ArrowDown, ArrowRightLeft, ArrowUp } from '@/core/app-icons';
 import { messageOf } from '@/lib/error-message';
-import { type Item, type Page, useMoveItem, useRemoveItem } from './use-pages';
+import { MoveItemDialog } from '@/sections/move-item-dialog';
+import { type Item, type Page, type Section, useMoveItem, useRemoveItem } from './use-pages';
 
 interface ItemMenuProps {
   page: Page;
+  /** The section the item is in. */
+  section: Section;
   item: Item;
-  /** Where the item is on its page, from 0. */
+  /** Where the item is in its section, from 0. */
   index: number;
   /** Opens the item's edit dialog. */
   onEdit: () => void;
 }
 
-/** The ⋯ menu on an item: edit, move up or down, remove. */
-export function ItemMenu({ page, item, index, onEdit }: ItemMenuProps) {
+/** The ⋯ menu on an item: edit, move up or down within its section or to another, remove. */
+export function ItemMenu({ page, section, item, index, onEdit }: ItemMenuProps) {
   const toast = useToast();
   const moveItem = useMoveItem();
   const removeItem = useRemoveItem();
   const [isConfirmingRemove, setIsConfirmingRemove] = useState(false);
+  const [moveSession, setMoveSession] = useState<number | null>(null);
   const isFirst = index === 0;
-  const isLast = index === page.items.length - 1;
+  const isLast = index === section.items.length - 1;
+  const hasOtherSections = page.sections.length > 1;
 
   /**
-   * Moves the item one place, and says so when the server refuses.
+   * Moves the item one place within its section, and says so when the server refuses.
    *
-   * @param toIndex - Where it goes.
+   * @param toIndex - Where it goes in the section.
    */
   const move = (toIndex: number): void => {
     moveItem.mutate(
@@ -56,10 +61,31 @@ export function ItemMenu({ page, item, index, onEdit }: ItemMenuProps) {
           <MenuItem iconSlot={<Pencil />} label="Edit" onSelect={onEdit} />
           <MenuItem iconSlot={<ArrowUp />} label="Move up" disabled={isFirst} onSelect={() => move(index - 1)} />
           <MenuItem iconSlot={<ArrowDown />} label="Move down" disabled={isLast} onSelect={() => move(index + 1)} />
+          {hasOtherSections ? (
+            <MenuItem
+              iconSlot={<ArrowRightLeft />}
+              label="Move to section…"
+              onSelect={() => setMoveSession((count) => (count ?? 0) + 1)}
+            />
+          ) : null}
           <MenuSeparator />
           <MenuItem iconSlot={<Trash2 />} label="Remove" destructive onSelect={() => setIsConfirmingRemove(true)} />
         </MenuContent>
       </Menu>
+      {moveSession === null ? null : (
+        <MoveItemDialog
+          key={moveSession}
+          open
+          onOpenChange={(isOpen) => {
+            if (isOpen === false) {
+              setMoveSession(null);
+            }
+          }}
+          page={page}
+          item={item}
+          sectionId={section.id}
+        />
+      )}
       <ConfirmDialog
         open={isConfirmingRemove}
         onOpenChange={setIsConfirmingRemove}
