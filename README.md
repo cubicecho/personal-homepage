@@ -79,8 +79,11 @@ Apps and frames show the service in an `<iframe>`. The service talks to its own 
 nothing is proxied.
 
 - **Some services refuse to be framed.** `X-Frame-Options` or a `frame-ancestors` policy makes the browser show a
-  blank box, and the page has no way to detect it. That is why every frame has **Open in the browser**. A service
-  that won't frame is better added as a link.
+  blank box, and the page itself can't tell. So the server asks the site (`Query.frameCheck`, reading only the
+  headers) and the item dialog and the app view warn when it forbids framing, with a one-click switch to a link
+  that opens a new tab. A `frame-ancestors` list of hosts counts as forbidding, since the server can't know which
+  address you open the homepage at. A site that can't be reached gets no warning. Every frame still has
+  **Open in the browser**.
 - **Use addresses that work from every device you'll open the homepage on.** `http://localhost:8096` means a
   different machine on your phone.
 

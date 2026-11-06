@@ -6,6 +6,7 @@ import { RadioGroupField, type RadioOption } from '@/components/radio-group-fiel
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { FormElement } from '@/components/ui/form-element';
+import { FrameCheckNotice } from '@/frames/frame-check-notice';
 import { messageOf } from '@/lib/error-message';
 import { checkFrameHeight, checkLength, checkTitle, checkUrl } from './form-checks';
 import { IconField } from './icon-field';
@@ -164,6 +165,27 @@ export function ItemDialog({ open, onOpenChange, page, item }: ItemDialogProps) 
                     limits ? `Left blank, the frame is ${limits.defaultFrameHeightPx} pixels tall.` : undefined
                   }
                   validators={{ onChange: ({ value }) => checkFrameHeight(value, heightBounds) }}
+                />
+              ) : null
+            }
+          </form.Subscribe>
+          <form.Subscribe selector={(state) => state.values}>
+            {({ kind, opensIn, url }) =>
+              kind === 'FRAME' || opensIn === 'APP' ? (
+                <FrameCheckNotice
+                  url={url}
+                  isTyping
+                  actionSlot={
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      content="Open it in a new tab instead"
+                      onClick={() => {
+                        form.setFieldValue('kind', 'LINK');
+                        form.setFieldValue('opensIn', 'NEW_TAB');
+                      }}
+                    />
+                  }
                 />
               ) : null
             }
