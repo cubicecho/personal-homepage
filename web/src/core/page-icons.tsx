@@ -19,11 +19,11 @@ import {
   SquareKanban,
   Terminal,
 } from 'lucide-react';
-import type { ReactElement, ReactNode } from 'react';
+import { type ReactElement, type ReactNode, useState } from 'react';
 import { Calendar, Download, type IconProps, Settings } from '@/components/ui/icons';
 
 /** A glyph component, as lucide and `@cubeui/icons` both export them. */
-type Glyph = (props: IconProps) => ReactNode;
+export type Glyph = (props: IconProps) => ReactNode;
 
 /** How one built-in glyph is drawn, and what it is called in the picker. */
 interface PageIcon {
@@ -74,17 +74,42 @@ export function isGlyphName(icon: string): icon is GlyphName {
   return Object.hasOwn(PAGE_ICONS, icon);
 }
 
+interface IconImageProps {
+  src: string;
+  /** Drawn instead when the image doesn't load: a site that is down, or an icon that was removed. */
+  fallback: Glyph;
+}
+
+/** An icon image, falling back to a glyph when it can't be loaded. */
+function IconImage({ src, fallback: Fallback }: IconImageProps) {
+  const [isBroken, setIsBroken] = useState(false);
+  if (isBroken) {
+    return <Fallback />;
+  }
+  return (
+    <img
+      src={src}
+      alt=""
+      loading="lazy"
+      referrerPolicy="no-referrer"
+      className="size-full object-contain"
+      onError={() => setIsBroken(true)}
+    />
+  );
+}
+
 /**
  * Draws a page's or item's icon.
  *
  * @param icon - The stored icon reference, or null for none.
- * @param fallback - What to draw when there is none, or it is not a glyph and has no image.
+ * @param fallback - What to draw when there is none, it is not a glyph and has no image, or the image fails.
  * @param [iconUrl] - Where the server says the icon's image is; drawn instead of a glyph when set.
  * @returns The icon's element.
  */
 export function iconElement(icon: string | null, fallback: Glyph, iconUrl: string | null = null): ReactElement {
   if (iconUrl !== null) {
-    return <img src={iconUrl} alt="" loading="lazy" className="size-full object-contain" />;
+    // Keyed by the address, so a new address gets a fresh try after an old one failed.
+    return <IconImage key={iconUrl} src={iconUrl} fallback={fallback} />;
   }
   const Glyph = icon !== null && isGlyphName(icon) ? PAGE_ICONS[icon].Glyph : fallback;
   return <Glyph />;

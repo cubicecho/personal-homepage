@@ -168,7 +168,7 @@ export function ItemDialog({ open, onOpenChange, page, item }: ItemDialogProps) 
               ) : null
             }
           </form.Subscribe>
-          <IconField form={form} name="icon" label="Icon" />
+          <IconField form={form} name="icon" label="Icon" allowFavicon />
           {serverError === undefined ? null : (
             <Alert variant="destructive" title="Not saved" description={serverError} />
           )}
