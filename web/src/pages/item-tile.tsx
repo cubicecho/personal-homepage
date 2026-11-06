@@ -2,6 +2,7 @@ import { Link } from '@tanstack/react-router';
 import { Globe } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { iconElement } from '@/core/page-icons';
+import { ItemStatusDot } from '@/status/item-status-dot';
 import { hostOf } from './form-checks';
 import { OPENS_IN } from './item-kinds';
 import type { Item, Page } from './use-pages';
@@ -62,7 +63,10 @@ export function ItemTile({ page, item, menuSlot }: ItemTileProps) {
           {body}
         </a>
       )}
-      <div className="shrink-0 p-2">{menuSlot}</div>
+      <div className="flex shrink-0 items-center gap-1 p-2">
+        <ItemStatusDot pageSlug={page.slug} item={item} />
+        {menuSlot}
+      </div>
     </li>
   );
 }
