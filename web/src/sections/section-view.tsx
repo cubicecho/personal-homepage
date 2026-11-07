@@ -1,5 +1,5 @@
 import { type ReactNode, useRef } from 'react';
-import { Disclosure } from '@/components/disclosure';
+import { Collapsible } from '@/components/collapsible';
 import { EmptyState } from '@/components/empty-state';
 import { Button } from '@/components/ui/button';
 import { Plus } from '@/components/ui/icons';
@@ -57,14 +57,14 @@ export function SectionView({ page, section, index, onAddItem, onEditItem }: Sec
 
   const count = section.items.length;
   return (
-    <Disclosure
+    <Collapsible
       title={section.title}
       description={count === 1 ? '1 item' : `${count} items`}
       open={isOpen}
       onOpenChange={setOpen}
       actionSlot={menu}
       titleClassName="font-semibold text-base text-foreground"
-      // The disclosure indents its body under the chevron; cards line up with the page's other sections instead.
+      // The collapsible indents its body under the chevron; cards line up with the page's other sections instead.
       contentClassName="pt-3 pl-0"
       contentSlot={items}
     />

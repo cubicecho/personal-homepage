@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { CardLayout } from '@/components/card-layout';
-import { QueryError } from '@/components/query-state';
+import { LoadError } from '@/components/load-state';
 import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { iconElement } from '@/core/page-icons';
@@ -38,7 +38,7 @@ export function WidgetCard({ page, item, menuSlot }: WidgetCardProps) {
 
   let content: ReactNode = null;
   if (query.isError) {
-    content = <QueryError compact error={query.error} onRetry={query.refetch} what={`“${item.title}”`} />;
+    content = <LoadError compact error={query.error} onRetry={query.refetch} what={`“${item.title}”`} />;
   } else if (data?.result != null) {
     content = <WidgetResultView result={data.result} now={now} />;
   } else if (data?.error != null) {
@@ -51,7 +51,9 @@ export function WidgetCard({ page, item, menuSlot }: WidgetCardProps) {
     <CardLayout
       title={title}
       // One line at any width: a narrow card cuts the title short rather than dropping the menu below it.
-      headerClassName="flex-nowrap"
+      // cubeui's heading row wraps once the title has under 10rem, and takes no prop to stop it, so this
+      // reaches the row inside the header.
+      headerClassName="[&>div]:flex-nowrap"
       // As tall as the 28px controls beside it, so the title and they share a centre line.
       titleClassName="leading-7"
       iconSlot={iconElement(item.icon, type.Glyph, item.iconUrl)}

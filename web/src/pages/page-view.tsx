@@ -2,8 +2,8 @@ import { Link } from '@tanstack/react-router';
 import { useState } from 'react';
 import { OpenInstanceNotice } from '@/auth/open-instance-notice';
 import { EmptyState } from '@/components/empty-state';
+import { LoadError } from '@/components/load-state';
 import { PageLayout } from '@/components/page-layout';
-import { QueryError } from '@/components/query-state';
 import { Button } from '@/components/ui/button';
 import { Pencil, Plus } from '@/components/ui/icons';
 import { LayoutGrid } from '@/core/app-icons';
@@ -53,7 +53,7 @@ export function PageView({ slug }: PageViewProps) {
     return (
       <PageLayout
         title="Homepage"
-        contentSlot={<QueryError error={query.error} onRetry={query.refetch} what="your pages" />}
+        contentSlot={<LoadError error={query.error} onRetry={query.refetch} what="your pages" />}
       />
     );
   }

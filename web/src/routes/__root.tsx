@@ -12,15 +12,15 @@ import { Ellipsis, House, LogOut } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { rememberReturnTo } from '@/auth/return-to';
 import { ACCESS_KEY, useAccess, useCanEdit, useSignOut } from '@/auth/use-access';
-import { CenteredLayout } from '@/components/centered-layout';
+import { CenteredCardLayout } from '@/components/centered-card-layout';
 import { EmptyState } from '@/components/empty-state';
-import { QueryState } from '@/components/query-state';
-import { RouteError } from '@/components/route-error';
+import { ErrorPage } from '@/components/error-page';
+import { LoadState } from '@/components/load-state';
 import {
-  BarNavItem,
+  AppBarItem,
   Sidebar,
   SidebarCollapseButton,
-  SidebarNavItem,
+  SidebarItem,
   SidebarSection,
   useSidebar,
 } from '@/components/sidebar';
@@ -42,8 +42,8 @@ import { ShortcutsProvider, useShortcuts } from '@/shell/shortcuts-dialog';
 import { ThemeMenu, ThemeMenuItems } from '@/shell/theme-menu';
 import { useSidebarFold } from '@/shell/use-sidebar-fold';
 
-const SidebarLink = createLink(SidebarNavItem);
-const BarLink = createLink(BarNavItem);
+const SidebarLink = createLink(SidebarItem);
+const BarLink = createLink(AppBarItem);
 /** How many pages the phone bar has room for beside the brand and its buttons; the rest are in its menu. */
 const BAR_PAGE_COUNT = 4;
 /** The pages drawn without the shell: signing in happens before there is anything to show in it. */
@@ -52,7 +52,7 @@ const SETTINGS_PATH = '/settings';
 
 export const Route = createRootRoute({
   component: RootRoute,
-  errorComponent: ({ error, reset }) => <RouteError error={error} reset={reset} />,
+  errorComponent: ({ error, reset }) => <ErrorPage error={error} reset={reset} />,
 });
 
 /**
@@ -97,7 +97,7 @@ function SidebarHeader() {
  */
 function FoldedNewPageRow({ label, onPress }: { label: string; onPress: () => void }) {
   const { collapsed } = useSidebar();
-  return collapsed ? <SidebarNavItem label={label} iconSlot={<Plus />} onClick={onPress} /> : null;
+  return collapsed ? <SidebarItem label={label} iconSlot={<Plus />} onClick={onPress} /> : null;
 }
 
 /**
@@ -116,7 +116,7 @@ function AccountRows({ isSettings }: { isSettings: boolean }) {
     <>
       <SidebarLink to={SETTINGS_PATH} label="Settings" iconSlot={<Settings />} active={isSettings} />
       {isOidc ? (
-        <SidebarNavItem
+        <SidebarItem
           label={`Sign out ${viewer.name ?? viewer.email}`}
           iconSlot={<LogOut />}
           onClick={() => signOut.mutate(undefined, { onSettled: () => void navigate({ to: '/login' }) })}
@@ -143,7 +143,7 @@ function SidebarFooter({ isSettings }: { isSettings: boolean }) {
   return (
     <div className={collapsed ? 'flex flex-col items-center gap-2' : 'flex flex-col gap-2'}>
       <AccountRows isSettings={isSettings} />
-      <SidebarNavItem
+      <SidebarItem
         label={`${SHORTCUTS_LABEL} (${chordLabel(SHORTCUTS_CHORD)})`}
         iconSlot={<Keyboard />}
         onClick={openShortcuts}
@@ -249,7 +249,7 @@ function RootRoute() {
   }
   if (access.data === undefined || mustSignIn) {
     // Who is asking decides what there is to draw, so nothing is drawn until the server has said.
-    return <CenteredLayout title="Homepage" loading contentSlot={null} />;
+    return <CenteredCardLayout title="Homepage" loading contentSlot={null} />;
   }
   return <Shell isSettings={pathname.startsWith(SETTINGS_PATH)} />;
 }
@@ -349,7 +349,7 @@ function Shell({ isSettings }: { isSettings: boolean }) {
                         ) : null
                       }
                       status={
-                        <QueryState
+                        <LoadState
                           compact
                           query={query}
                           what="your pages"

@@ -12,10 +12,10 @@ import {
   useAppForm,
 } from '@/components/app-form';
 import { DialogLayout } from '@/components/dialog-layout';
-import { RadioGroupField, type RadioOption } from '@/components/radio-group-field';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { FormElement } from '@/components/ui/form-element';
+import { RadioGroupField, type RadioOption } from '@/components/ui/radio-group-field';
 import { DiscoveredAppPicker } from '@/discovery/discovered-app-picker';
 import { FillInButton } from '@/discovery/fill-in-button';
 import { LinkedAppNote } from '@/discovery/linked-app-note';

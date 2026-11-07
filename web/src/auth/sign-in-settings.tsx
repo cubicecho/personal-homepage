@@ -3,8 +3,8 @@ import type { SsoSetupFieldsFragment } from '@/__generated__/graphql';
 import { InputField, useAppForm } from '@/components/app-form';
 import { CardLayout } from '@/components/card-layout';
 import { ConfirmButton } from '@/components/confirm-button';
-import { DescriptionList, PropertyRow } from '@/components/description-list';
-import { QueryError } from '@/components/query-state';
+import { LoadError } from '@/components/load-state';
+import { PropertyList, PropertyRow } from '@/components/property-list';
 import { Alert } from '@/components/ui/alert';
 import { FormElement } from '@/components/ui/form-element';
 import { useToast } from '@/components/ui/toast';
@@ -112,7 +112,7 @@ export function SignInSettings() {
       <CardLayout
         title="Sign-in"
         level={2}
-        contentSlot={<QueryError error={failed} onRetry={() => void setup.refetch()} what="how sign-in is set up" />}
+        contentSlot={<LoadError error={failed} onRetry={() => void setup.refetch()} what="how sign-in is set up" />}
       />
     );
   }
@@ -141,7 +141,7 @@ export function SignInSettings() {
               description="Pair a provider below, such as heautou, so that people have to sign in. Or put it behind a proxy that does forward auth, and set FORWARD_AUTH_TRUSTED_PROXIES."
             />
           ) : null}
-          <DescriptionList
+          <PropertyList
             contentSlot={
               <>
                 <PropertyRow label="Who can change it" value={whoEdits} />
