@@ -1,8 +1,8 @@
 import type { WidgetResultFieldsFragment } from '@/__generated__/graphql';
-import { DescriptionList, PropertyRow } from '@/components/description-list';
 import { EmptyState } from '@/components/empty-state';
 import { List } from '@/components/list';
 import { ListItem } from '@/components/list-item';
+import { PropertyList, PropertyRow } from '@/components/property-list';
 import { StatTile } from '@/components/stat-tile';
 import { TriangleAlert } from '@/components/ui/icons';
 import { timeAgo } from './use-widget-data';
@@ -51,7 +51,7 @@ function ApiResultView({ result }: { result: ApiResult }) {
     );
   }
   return (
-    <DescriptionList
+    <PropertyList
       contentSlot={result.rows.map((row) => (
         <PropertyRow
           key={row.label}

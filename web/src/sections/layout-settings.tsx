@@ -2,8 +2,8 @@ import { useState } from 'react';
 import { useCanEdit } from '@/auth/use-access';
 import { SelectField, useAppForm } from '@/components/app-form';
 import { CardLayout } from '@/components/card-layout';
-import { DescriptionList, PropertyRow } from '@/components/description-list';
-import { QueryError } from '@/components/query-state';
+import { LoadError } from '@/components/load-state';
+import { PropertyList, PropertyRow } from '@/components/property-list';
 import { Alert } from '@/components/ui/alert';
 import { FormElement } from '@/components/ui/form-element';
 import { useToast } from '@/components/ui/toast';
@@ -69,7 +69,7 @@ export function LayoutSettings() {
       <CardLayout
         title={TITLE}
         level={2}
-        contentSlot={<QueryError error={layout.error} onRetry={() => void layout.refetch()} what="the layout" />}
+        contentSlot={<LoadError error={layout.error} onRetry={() => void layout.refetch()} what="the layout" />}
       />
     );
   }
@@ -85,7 +85,7 @@ export function LayoutSettings() {
         canEdit ? (
           <ColumnsForm key={layout.data.columns} layout={layout.data} />
         ) : (
-          <DescriptionList
+          <PropertyList
             contentSlot={<PropertyRow label="Columns" value={columnsLabel(layout.data.columns)} hint={COLUMNS_HINT} />}
           />
         )

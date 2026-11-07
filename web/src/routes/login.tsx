@@ -2,8 +2,8 @@ import { createFileRoute, Link } from '@tanstack/react-router';
 import { LogIn } from 'lucide-react';
 import { CallbackNotice } from '@/auth/callback-notice';
 import { useAccess, useAuthConfig, useSsoSetup } from '@/auth/use-access';
-import { CenteredLayout } from '@/components/centered-layout';
-import { QueryError } from '@/components/query-state';
+import { CenteredCardLayout } from '@/components/centered-card-layout';
+import { LoadError } from '@/components/load-state';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 
@@ -54,20 +54,20 @@ function LoginRoute() {
 
   if (config.isError) {
     return (
-      <CenteredLayout
+      <CenteredCardLayout
         title="Sign in"
-        contentSlot={<QueryError error={config.error} onRetry={config.refetch} what="how to sign in" />}
+        contentSlot={<LoadError error={config.error} onRetry={config.refetch} what="how to sign in" />}
       />
     );
   }
   if (config.data === undefined) {
-    return <CenteredLayout title="Sign in" loading contentSlot={null} />;
+    return <CenteredCardLayout title="Sign in" loading contentSlot={null} />;
   }
 
   const { mode, sso, forwardAuth } = config.data;
   if (viewer !== null || mode === 'OPEN') {
     return (
-      <CenteredLayout
+      <CenteredCardLayout
         title={viewer === null ? 'No sign-in needed' : 'You are signed in'}
         description={
           viewer === null
@@ -80,7 +80,7 @@ function LoginRoute() {
   }
 
   return (
-    <CenteredLayout
+    <CenteredCardLayout
       iconSlot={<LogIn />}
       title="Sign in"
       description={

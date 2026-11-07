@@ -1,8 +1,8 @@
 import { Link } from '@tanstack/react-router';
 import { EmptyState } from '@/components/empty-state';
 import { HeaderContentFooter } from '@/components/header-content-footer';
+import { LoadError } from '@/components/load-state';
 import { PageLayout } from '@/components/page-layout';
-import { QueryError } from '@/components/query-state';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft } from '@/components/ui/icons';
 import { AppWindow, ExternalLink } from '@/core/app-icons';
@@ -43,10 +43,7 @@ export function AppView({ slug, itemId }: AppViewProps) {
 
   if (query.isError) {
     return (
-      <PageLayout
-        title="App"
-        contentSlot={<QueryError error={query.error} onRetry={query.refetch} what="this app" />}
-      />
+      <PageLayout title="App" contentSlot={<LoadError error={query.error} onRetry={query.refetch} what="this app" />} />
     );
   }
   if (query.isPending) {

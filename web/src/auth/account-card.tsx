@@ -1,6 +1,6 @@
 import { useNavigate } from '@tanstack/react-router';
 import { CardLayout } from '@/components/card-layout';
-import { DescriptionList, PropertyRow } from '@/components/description-list';
+import { PropertyList, PropertyRow } from '@/components/property-list';
 import { Button } from '@/components/ui/button';
 import { useAccess, useSignOut } from './use-access';
 
@@ -35,7 +35,7 @@ export function AccountCard() {
       title="Your account"
       level={2}
       contentSlot={
-        <DescriptionList
+        <PropertyList
           contentSlot={
             <>
               <PropertyRow

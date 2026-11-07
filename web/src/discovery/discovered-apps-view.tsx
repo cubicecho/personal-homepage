@@ -4,7 +4,7 @@ import { CardLayout } from '@/components/card-layout';
 import { EmptyState } from '@/components/empty-state';
 import { List } from '@/components/list';
 import { ListItem } from '@/components/list-item';
-import { QueryState } from '@/components/query-state';
+import { LoadState } from '@/components/load-state';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Ellipsis, Plus } from '@/components/ui/icons';
@@ -262,7 +262,7 @@ export function DiscoveredAppsView() {
                 <label htmlFor={dismissedSwitchId}>Show dismissed</label>
               </span>
             </div>
-            <QueryState
+            <LoadState
               query={apps}
               what="the apps found on your network"
               count={shown.length}

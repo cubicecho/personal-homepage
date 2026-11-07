@@ -2,7 +2,7 @@ import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import { useEffect, useRef } from 'react';
 import { takeReturnTo } from '@/auth/return-to';
 import { useFinishSignIn } from '@/auth/use-access';
-import { CenteredLayout } from '@/components/centered-layout';
+import { CenteredCardLayout } from '@/components/centered-card-layout';
 import { Button } from '@/components/ui/button';
 import { messageOf } from '@/lib/error-message';
 
@@ -47,7 +47,7 @@ function FinishSignInRoute() {
   const isFailed = token === undefined || finish.isError;
   if (isFailed) {
     return (
-      <CenteredLayout
+      <CenteredCardLayout
         title="Not signed in"
         description={
           (finish.isError ? messageOf(finish.error) : undefined) ??
@@ -57,5 +57,5 @@ function FinishSignInRoute() {
       />
     );
   }
-  return <CenteredLayout title="Signing you in…" loading contentSlot={null} />;
+  return <CenteredCardLayout title="Signing you in…" loading contentSlot={null} />;
 }
