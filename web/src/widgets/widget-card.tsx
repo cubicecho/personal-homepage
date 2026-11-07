@@ -50,6 +50,10 @@ export function WidgetCard({ page, item, menuSlot }: WidgetCardProps) {
   return (
     <CardLayout
       title={title}
+      // One line at any width: a narrow card cuts the title short rather than dropping the menu below it.
+      // cubeui's heading row wraps once the title has under 10rem, and takes no prop to stop it, so this
+      // reaches the row inside the header.
+      headerClassName="[&>div]:flex-nowrap"
       // As tall as the 28px controls beside it, so the title and they share a centre line.
       titleClassName="leading-7"
       iconSlot={iconElement(item.icon, type.Glyph, item.iconUrl)}
