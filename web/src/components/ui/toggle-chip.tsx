@@ -8,10 +8,10 @@ export type ToggleChipProps = Omit<
   selected?: boolean | undefined;
   /**
    * Overrides the selected background with a literal colour — for a chip whose
-   * own colour is the content, such as a palette swatch. Passing it also turns
-   * off the selected label colour, since the caller's background is unknown and
-   * `text-active-foreground` would be a guess. Pair it with
-   * `readableTextColor` if the label has to stay legible on an arbitrary hue.
+   * own colour is the content, such as a palette swatch. The label stays
+   * `text-foreground`, which is measured against the chosen tint and not against
+   * the caller's colour: pair it with `readableTextColor` if the label has to
+   * stay legible on an arbitrary hue.
    */
   backgroundColor?: string | undefined;
   size?: "sm" | "default" | undefined;
@@ -49,28 +49,24 @@ const ToggleChip = React.forwardRef<HTMLButtonElement, ToggleChipProps>(
       aria-disabled={disabled ?? false}
       className={cn(
         "cube-rn-view cube-rn-pressable",
-        "group/chip items-center justify-center rounded-md border focus-visible:outline-none",
+        "items-center justify-center rounded-md border focus-visible:outline-none",
         // The button's `xs` and `sm` heights, so a chip sits flush beside a button or a
         // segmented control rather than 2px off it.
         size === "sm" ? "h-7 px-2" : "h-9 px-3",
         // A control's edge is /50, 3:1 on every surface: at /10 an unchosen chip was a faint box
-        // beside the segmented frame. Focus looks hovered; a chosen chip, which has no hover,
-        // deepens instead.
+        // beside the segmented frame. A chosen chip is the chosen tint, edged in `active` because
+        // the tint is not 3:1 from the surface, and a step further under the pointer, focused and
+        // pressed. Focused, an unchosen chip looks hovered.
         selected
-          ? "border-active bg-active focus-visible:bg-hover focus-visible:text-foreground active:bg-active/90"
+          ? "border-active bg-active/40 hover:bg-active/60 focus-visible:bg-active/60 active:bg-active/60"
           : "border-foreground/50 bg-background hover:bg-hover focus-visible:bg-hover active:bg-hover",
         // The label colour on the container as well as on the `<Text>` below,
         // and that is not a duplicate. The `<Text>` is the only one native
         // reads, and it is only ever reached by a bare string; an element
         // child — an icon, a `<Badge>`, anything with its own markup — passes
         // through untouched and on web takes its colour by inheriting from
-        // here. Without this line a selected chip holding markup drew
-        // `text-foreground` on `bg-neutral`, which is near-black on near-black.
-        // Its own `focus-visible:`, not the `group-*/chip` variant the label takes: that variant
-        // selects what is inside the chip, so on the chip itself it would never apply.
-        selected && !backgroundColor
-          ? "text-active-foreground focus-visible:text-foreground"
-          : "text-foreground",
+        // here.
+        "text-foreground",
         disabled && "opacity-50",
         className,
       )}
@@ -81,11 +77,8 @@ const ToggleChip = React.forwardRef<HTMLButtonElement, ToggleChipProps>(
         <span
           className={cn(
             "cube-rn-text",
-            "font-semibold",
+            "font-semibold text-foreground",
             size === "sm" ? "text-xs" : "text-sm",
-            selected && !backgroundColor
-              ? "text-active-foreground group-focus-visible/chip:text-foreground"
-              : "text-foreground",
           )}
         >
           {children}
