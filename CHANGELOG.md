@@ -1,3 +1,10 @@
+## [3.5.1](https://github.com/cubicecho/personal-homepage/compare/v3.5.0...v3.5.1) (2026-11-07)
+
+
+### Bug Fixes
+
+* **web:** keep a widget card's menu on its title's line ([f5032af](https://github.com/cubicecho/personal-homepage/commit/f5032afe499017d2fe5eba6b2f4085d4f9791af7))
+
 # [3.5.0](https://github.com/cubicecho/personal-homepage/compare/v3.4.0...v3.5.0) (2026-11-06)
 
 
