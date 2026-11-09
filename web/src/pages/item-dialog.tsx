@@ -429,11 +429,12 @@ export function ItemDialog({
         <>
           <Button variant="outline" onClick={close} content="Cancel" />
           <form.AppForm>
-            {isEdit ? (
-              <form.SubmitButton requireChanges content="Save changes" />
-            ) : (
-              <form.SubmitButton variant="info" content="Add item" pendingLabel="Adding…" />
-            )}
+            <form.SubmitButton
+              isEdit={isEdit}
+              requireChanges={isEdit}
+              createLabel="Add item"
+              loadingLabel={isEdit ? undefined : 'Adding…'}
+            />
           </form.AppForm>
         </>
       )}

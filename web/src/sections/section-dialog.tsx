@@ -107,11 +107,12 @@ export function SectionDialog({ open, onOpenChange, page, section }: SectionDial
         <>
           <Button variant="outline" onClick={close} content="Cancel" />
           <form.AppForm>
-            {isEdit ? (
-              <form.SubmitButton requireChanges content="Save changes" />
-            ) : (
-              <form.SubmitButton variant="info" content="Add section" pendingLabel="Adding…" />
-            )}
+            <form.SubmitButton
+              isEdit={isEdit}
+              requireChanges={isEdit}
+              createLabel="Add section"
+              loadingLabel={isEdit ? undefined : 'Adding…'}
+            />
           </form.AppForm>
         </>
       )}

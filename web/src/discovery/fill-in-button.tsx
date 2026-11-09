@@ -34,7 +34,7 @@ export function FillInButton({ url, onDescribed }: FillInButtonProps) {
       onDescribed(described);
       toast(`Filled in from ${new URL(address).host}.`, 'positive');
     } catch (error) {
-      toast(messageOf(error) ?? 'The address could not be read. Try again.', 'error');
+      toast(messageOf(error) ?? 'The address could not be read. Try again.', 'negative');
     }
   };
 

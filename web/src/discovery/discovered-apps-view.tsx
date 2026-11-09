@@ -169,7 +169,7 @@ function AppRow({ app, onAdd }: { app: DiscoveredApp; onAdd: () => void }) {
   const toggleDismissed = (): void => {
     dismiss.mutate(
       { id: app.id, dismissed: app.dismissed === false },
-      { onError: (error) => toast(`Couldn't change ${app.name}. ${messageOf(error) ?? ''}`.trim(), 'error') },
+      { onError: (error) => toast(`Couldn't change ${app.name}. ${messageOf(error) ?? ''}`.trim(), 'negative') },
     );
   };
 
@@ -226,7 +226,7 @@ export function DiscoveredAppsView() {
       const fresh = result.added === 1 ? '1 new' : `${result.added} new`;
       toast(`Found ${result.found} ${result.found === 1 ? 'app' : 'apps'}, ${fresh}.`, 'positive');
     } catch (error) {
-      toast(messageOf(error) ?? 'The rescan failed. Try again.', 'error');
+      toast(messageOf(error) ?? 'The rescan failed. Try again.', 'negative');
     }
   };
 
