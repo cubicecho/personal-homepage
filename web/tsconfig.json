@@ -3,9 +3,6 @@
   "compilerOptions": {
     "lib": ["ES2023", "DOM", "DOM.Iterable"],
     "jsx": "react-jsx",
-    // Off while the installed lib/utils.ts (cubeui) has an unused `touchTarget(drawn)` parameter, which
-    // fails TS6133; vendored files are not edited. Biome's noUnusedFunctionParameters covers the app's code.
-    "noUnusedParameters": false,
     "types": ["vite/client"],
     "paths": { "@/*": ["./src/*"] }
   },
