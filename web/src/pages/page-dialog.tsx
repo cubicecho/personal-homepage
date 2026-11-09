@@ -126,11 +126,12 @@ export function PageDialog({ open, onOpenChange, page, onSaved }: PageDialogProp
         <>
           <Button variant="outline" onClick={close} content="Cancel" />
           <form.AppForm>
-            {isEdit ? (
-              <form.SubmitButton requireChanges content="Save changes" />
-            ) : (
-              <form.SubmitButton variant="info" content="Create page" pendingLabel="Creating…" />
-            )}
+            <form.SubmitButton
+              isEdit={isEdit}
+              requireChanges={isEdit}
+              createLabel="Create page"
+              loadingLabel={isEdit ? undefined : 'Creating…'}
+            />
           </form.AppForm>
         </>
       )}

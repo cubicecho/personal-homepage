@@ -2,7 +2,6 @@ import type { ReactNode } from 'react';
 import { CardLayout } from '@/components/card-layout';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { ExternalLink, PanelsTopLeft } from '@/core/app-icons';
 import { iconElement } from '@/core/page-icons';
 import { useIsEditing } from '@/shell/edit-mode';
@@ -30,18 +29,13 @@ const OPEN_LABEL = 'Open in the browser';
  */
 export function OpenInBrowserButton({ url }: { url: string }) {
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          aria-label={OPEN_LABEL}
-          linkSlot={<a href={url} target="_blank" rel="noreferrer" />}
-          iconSlot={<ExternalLink />}
-        />
-      </TooltipTrigger>
-      <TooltipContent>{OPEN_LABEL}</TooltipContent>
-    </Tooltip>
+    <Button
+      variant="ghost"
+      size="icon-xs"
+      aria-label={OPEN_LABEL}
+      linkSlot={<a href={url} target="_blank" rel="noreferrer" />}
+      iconSlot={<ExternalLink />}
+    />
   );
 }
 

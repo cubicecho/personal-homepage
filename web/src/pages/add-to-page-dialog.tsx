@@ -105,7 +105,7 @@ export function AddToPageDialog({
         <>
           <Button variant="outline" onClick={close} content="Cancel" />
           <form.AppForm>
-            <form.SubmitButton variant="info" content="Continue" />
+            <form.SubmitButton variant="info" createLabel="Continue" />
           </form.AppForm>
         </>
       )}

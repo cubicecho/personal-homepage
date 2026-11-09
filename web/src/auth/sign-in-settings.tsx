@@ -88,7 +88,7 @@ function PairForm() {
       />
       {serverError === undefined ? null : <Alert variant="destructive" title="Not paired" description={serverError} />}
       <form.AppForm>
-        <form.SubmitButton variant="info" content="Pair" pendingLabel="Pairing…" />
+        <form.SubmitButton variant="info" createLabel="Pair" loadingLabel="Pairing…" />
       </form.AppForm>
     </FormElement>
   );

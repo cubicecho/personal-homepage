@@ -49,7 +49,7 @@ function ColumnsForm({ layout }: { layout: SiteLayout }) {
       <SelectField form={form} name="columns" label="Columns" description={COLUMNS_HINT} options={options} />
       {serverError === undefined ? null : <Alert variant="destructive" title="Not saved" description={serverError} />}
       <form.AppForm>
-        <form.SubmitButton requireChanges content="Save layout" pendingLabel="Saving…" />
+        <form.SubmitButton requireChanges createLabel="Save layout" />
       </form.AppForm>
     </FormElement>
   );

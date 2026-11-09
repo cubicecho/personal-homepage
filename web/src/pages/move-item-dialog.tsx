@@ -132,7 +132,7 @@ export function MoveItemDialog({ open, onOpenChange, page, item, sectionId }: Mo
         <>
           <Button variant="outline" onClick={close} content="Cancel" />
           <form.AppForm>
-            <form.SubmitButton requireChanges variant="info" content="Move" pendingLabel="Moving…" />
+            <form.SubmitButton requireChanges variant="info" createLabel="Move" loadingLabel="Moving…" />
           </form.AppForm>
         </>
       )}
