@@ -1,3 +1,10 @@
+## [3.5.2](https://github.com/cubicecho/personal-homepage/compare/v3.5.1...v3.5.2) (2026-11-09)
+
+
+### Bug Fixes
+
+* **web:** reinstall cubeui segmented for the 40px strip, and turn noUnusedParameters back on ([5757e02](https://github.com/cubicecho/personal-homepage/commit/5757e02d7e2dcac5c9c3240eed47e3b99e30caa4)), closes [cubeui#540](https://github.com/cubeui/issues/540) [cubeui#541](https://github.com/cubeui/issues/541)
+
 ## [3.5.1](https://github.com/cubicecho/personal-homepage/compare/v3.5.0...v3.5.1) (2026-11-07)
 
 
